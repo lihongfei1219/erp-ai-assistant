@@ -1,0 +1,12 @@
+{
+  "policy_id": "qy.operating.v1",
+  "label": "有效销售订单（暂定）",
+  "included_statuses": ["订单完成", "已出库"],
+  "known_statuses": ["订单完成", "已出库", "配货中", "已退回", "待审核"],
+  "currency": "CNY",
+  "business_timezone": "Asia/Shanghai",
+  "amount_basis": "erp_order_total",
+  "refund_policy": "not_deducted",
+  "provisional": true,
+  "assumption_ids": ["B01", "B02", "B03", "B04", "B05", "B08", "B09", "B12"]
+}

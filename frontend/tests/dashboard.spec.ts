@@ -1,0 +1,155 @@
+import { test, expect, type Page } from "@playwright/test";
+import { money } from "../src/api";
+
+const token = "browser-test-token-0123456789abcdef";
+async function login(page: Page) {
+  await page.goto("/");
+  await page.getByLabel("访问令牌", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "进入工作台" }).click();
+  await expect(
+    page.getByRole("heading", { name: "经营概览", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByTestId("kpi-0")).toContainText("1,200.00");
+}
+
+test("decimal display preserves cents beyond floating point precision", () => {
+  expect(money("99999999999999.9999")).toBe("100,000,000,000,000.00");
+  expect(money("0.1050")).toBe("0.11");
+  expect(money("-0.1050")).toBe("-0.11");
+  expect(money("100.0001", 4)).toBe("100.0001");
+  expect(money(null)).toBe("—");
+});
+
+test("login, effective vs raw totals, evidence pagination and logout", async ({
+  page,
+}) => {
+  await login(page);
+  await page.getByRole("button", { name: "全部原始订单", exact: true }).click();
+  await expect(page.getByTestId("kpi-0")).toContainText("1,290.00");
+  await page
+    .getByRole("button", { name: "有效销售（暂定）", exact: true })
+    .click();
+  await expect(page.getByTestId("kpi-0")).toContainText("1,200.00");
+  await page.getByRole("button", { name: "订单明细", exact: true }).click();
+  await expect(page.getByText("共 11 张")).toBeVisible();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
+  await expect(page.getByText("DEMO-011", { exact: true })).toBeVisible();
+  await expect(page.getByText("DEMO-012", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "查看订单 DEMO-011" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("dialog")).toContainText("200.0000");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "全部原始订单", exact: true }).click();
+  await expect(page.getByText("共 12 张")).toBeVisible();
+  await page.getByRole("button", { name: "退出当前访问" }).click();
+  await expect(
+    page.getByRole("heading", { name: "进入经营工作台" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("erp-access-token")),
+  ).toBeNull();
+});
+
+test("rule explanation and central assumptions download", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: "业务口径", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "当前经营规则" }),
+  ).toBeVisible();
+  await expect(page.getByText("排除 1 张", { exact: false })).toBeVisible();
+  const downloadEvent = page.waitForEvent("download");
+  await page.getByRole("button", { name: "下载完整业务台账" }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toBe("业务假设与待确认事项.md");
+});
+
+test("invalid access token returns to login without showing data", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .getByLabel("访问令牌", { exact: true })
+    .fill("invalid-but-long-enough-token-123456");
+  await page.getByRole("button", { name: "进入工作台" }).click();
+  await expect(page.getByRole("alert")).toContainText("访问令牌无效");
+  await expect(page.getByTestId("kpi-0")).toHaveCount(0);
+});
+
+test("snapshot failure offers retry and never renders zero metrics", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/dashboard/operating", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "分析快照未就绪" }),
+    }),
+  );
+  await page.goto("/");
+  await page.getByLabel("访问令牌", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "进入工作台" }).click();
+  await expect(page.getByRole("alert")).toContainText("分析快照未就绪");
+  await expect(page.getByTestId("kpi-0")).toHaveCount(0);
+  await page.unroute("**/api/v1/dashboard/operating");
+  await page.getByRole("button", { name: "重新尝试" }).click();
+  await expect(page.getByTestId("kpi-0")).toContainText("1,200.00");
+});
+
+test("empty effective data is explicit", async ({ page }) => {
+  await page.route("**/api/v1/dashboard/operating", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.operating.summary = {
+      order_amount: "0.0000",
+      order_count: 0,
+      buyer_count: 0,
+      average_order_amount: null,
+      line_count: 0,
+      product_count: 0,
+    };
+    body.operating.buyers = [];
+    body.operating.products = [];
+    body.operating.daily = [];
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto("/");
+  await page.getByLabel("访问令牌", { exact: true }).fill(token);
+  await page.getByRole("button", { name: "进入工作台" }).click();
+  await expect(
+    page.getByText("当前统计范围内没有符合条件的订单。", { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByTestId("kpi-3")).toContainText("—");
+});
+
+test("mobile layout keeps navigation usable without page overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  await page.getByRole("button", { name: "业务口径", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "当前经营规则" }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "../.local/phase2-mobile.png",
+    fullPage: true,
+  });
+});
+
+test("desktop renders cleanly with no runtime exceptions", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 1080 });
+  await login(page);
+  await page.screenshot({
+    path: "../.local/phase2-dashboard.png",
+    fullPage: true,
+  });
+  expect(errors).toEqual([]);
+});
