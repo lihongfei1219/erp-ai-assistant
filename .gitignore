@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+.env.*
+!.env.example
+.local/
+database_backups/
+*.bak
+*.bak.gz
+.ssh_known_hosts
+node_modules/
+dist/

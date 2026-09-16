@@ -8,22 +8,25 @@
 
 产品入口包括经营看板、今日 Top 5、AI 问数和运营待办。每条重点事项应保留事实依据、统计时间、建议动作、负责人和处理状态；没有足够事项时如实展示实际数量。
 
-当前仓库处于文档规划阶段，尚无后端、前端、依赖清单、测试套件或 CI 配置，也未连接真实 ERP。涉及未来目录和命令的内容必须按下文标注的阶段理解。
+当前已有销售订单分析后端、React + TypeScript 三页经营看板、锁定依赖和后端／浏览器测试。已只读连接 QY 备份还原后的本地 `ERP_Local`，数据所有者确认备份覆盖全平台商家。同时保留原始订单与暂定有效销售指标，不代表支付成交额。助手数据库、增量同步、任务调度、AI、Top 5、运营待办和 CI 尚未实现。实际映射见 [数据字典](docs/data-dictionary.md)，所有未确定业务细节统一维护在 [业务假设台账](docs/business-assumptions.md)。
+
+用户已授权按常识采用可调整默认规则继续开发，无需因一般业务口径未确认而停工。默认纳入订单完成、已出库，CNY 和 Asia/Shanghai 暂定；规则在 `backend/config/business-rules.json`，新快照保存规则全文、版本和指纹。修改口径必须更新台账、配置、相关测试并重算新快照，不能静默修改旧结果。缺少支付事件或商家映射时不能编造对应事实。
 
 **当前技术决策**
 
 | 范围 | 决策与约束 |
 |---|---|
 | 架构 | 独立项目、前后端分离，取数、计算、接口和展示分工明确 |
-| 源数据库 | 已有 SQL Server；版本、表结构、状态与数据规模待确认 |
+| 源数据库 | 本地 SQL Server 17.0.1000.7、ERP_Local、兼容级别 100；697 表；业务口径与线上部署待确认 |
 | 后端 | Python + FastAPI |
 | 计算 | 当前仅使用 pandas 作为数据计算框架 |
-| 前端 | TypeScript；Web／桌面形态及 React／Vue 尚未确定 |
-| 数据访问 | 建议 SQLAlchemy + pyodbc；ODBC 驱动与版本按部署环境验证 |
-| 助手存储 | 建议独立 SQL Server 数据库，保存任务、指标、证据、会话和反馈 |
-| 后台任务 | 独立 Python 进程、低并发起步，任务状态持久化 |
+| 前端 | Web + React + TypeScript + Vite 6；本地构建由 FastAPI 同源提供 |
+| 数据访问 | SQLAlchemy + pyodbc + ODBC Driver 18，已验证 Windows 本地身份连接 |
+| 助手存储 | 当前仅使用 Git 忽略的本地 JSON 开发快照；独立 SQL Server 助手库仍为目标 |
+| 后台任务 | 当前独立 CLI 生成快照；持久化任务状态、调度与恢复待实现 |
 | AI | 模型通过受控工具获取数据并解释结果；供应商与部署方式待评测 |
-| 测试 | 后端建议 pytest；前端测试工具在框架确定后配置 |
+| 飞书 | 官方 Python SDK `lark-oapi` 已加入后端锁定依赖；仅环境准备，客户／群聊推送和调度未实现 |
+| 测试 | pytest + Ruff；TypeScript 构建及 Playwright 浏览器测试 |
 
 当前实施以方案第 15 节的 pandas 架构为准。第 14 节讨论的分布式计算、专用分析引擎和事件管道仅用于未来容量评估。新增基础设施前应有实际业务或性能依据，并记录决策原因。
 
@@ -45,7 +48,7 @@
 | `backend/tests/` | 单元、集成与问数评测样例 |
 | `frontend/src/` | TypeScript 客户端、页面和组件 |
 
-以上目录尚未创建，实施时按需要建立。实际目录或接口变化后，同步更新 README 和本文。
+当前已有 `backend/app/analysis/`、`connectors/`、`core/`、`schemas/`、`backend/workers/`、`backend/config/` 和 `backend/tests/{unit,api,integration}/`，以及 `frontend/src/` 和 `frontend/tests/`。首批 HTTP 路由暂集中在 `backend/app/main.py`；其余目录仍属规划。PowerShell 摸底与启动工具位于 `scripts/`。实际目录或接口变化后，同步更新 README 和本文。
 
 **数据与计算约定**
 
@@ -80,19 +83,26 @@ git diff --cached --check
 
 检查新增和修改文档的相对链接能否解析到仓库内文件，代码围栏是否闭合，技术决策是否一致，规划功能是否标注清楚。审查暂存内容，避免遗漏新增文档或带入无关文件。`git diff --check` 不覆盖未跟踪文件；新增文件加入暂存区后再执行 `git diff --cached --check`。
 
-当前没有业务测试套件，不应把文档检查报告为应用测试通过。
+文档检查与业务测试分别报告，不应把文档空白检查报告为应用测试通过。
 
-**业务代码落地后的测试方法**
+**当前后端测试方法与后续测试约定**
 
-初始化后端时添加 pytest 依赖、项目配置和测试目录。以下命令是未来约定，当前不可直接作为有效验证入口；待 `backend/` 与测试套件落地、完成依赖安装后，从 `backend/` 运行：
+从根目录 `.venv` 安装 `backend/requirements.lock` 后，在 `backend/` 运行：
 
 ```powershell
-python -m pytest tests/unit -q
-python -m pytest tests/api -q
-python -m pytest tests/integration -q
+..\.venv\Scripts\python.exe -m pytest tests/unit -q
+..\.venv\Scripts\python.exe -m pytest tests/api -q
+..\.venv\Scripts\ruff.exe check .
+$env:ERP_RUN_INTEGRATION = '1'
+..\.venv\Scripts\python.exe -m pytest tests/integration -q
+Remove-Item Env:ERP_RUN_INTEGRATION
 ```
 
-上述三个目录也属于规划。初始化时确保命令与实际结构一致；集成测试单独执行，并为 SQL Server 测试实例配置隔离的数据和凭据。默认单元和 API 测试使用固定样例与模拟模型服务，不依赖生产数据库或外部付费模型。
+三个测试目录均已建立。集成测试默认跳过，只在显式设置环境变量后读取本地恢复的测试库，不写源库。默认单元和 API 测试使用固定合成样例，不依赖数据库或外部模型。Windows 沙箱临时目录权限异常时可为 pytest 指定项目 `.local/` 下的新 `--basetemp` 和 `-o cache_dir=...`，不要清理未知临时目录。
+
+前端在 `frontend/` 运行 `npm run build` 和 `npm run test:e2e`。本机可设置 `PLAYWRIGHT_CHANNEL=chrome` 使用已安装浏览器；默认测试只使用合成记录，不连接 ERP。不要把真实企业名称、原单、令牌或截图写入受版本控制的测试用例。截图和跟踪文件保存在 `.local/`。
+
+以下矩阵同时列出当前和后续所需覆盖；已有订单指标、关联对账、暂定规则、开发令牌、快照、源库读取和看板测试。支付退款、增量、助手库写入、调度与 AI 尚未实现，不能宣称已通过对应测试。
 
 | 测试层次 | 验证方式 | 重点场景 |
 |---|---|---|
