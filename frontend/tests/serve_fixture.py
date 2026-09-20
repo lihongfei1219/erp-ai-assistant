@@ -1,4 +1,5 @@
 """Serve synthetic records through the real backend for browser tests; no ERP connection."""
+import os
 import sys
 from datetime import datetime
 from decimal import Decimal
@@ -33,5 +34,8 @@ report = analyze_sales(SalesExtract(pd.DataFrame(rows), pd.DataFrame(lines), 12,
     source_as_of=datetime.fromisoformat("2026-09-16T14:33:41+08:00"),
     rules=load_business_rules(), synthetic=True)
 
+os.environ["FEISHU_WEBHOOK_URL"] = ""
+os.environ["FEISHU_WEBHOOK_SECRET"] = ""
+os.environ["ERP_AI_ENABLED"] = "0"
 application = create_app(ApiSettings(token="browser-test-token-0123456789abcdef"), report=report)
 uvicorn.run(application, host="127.0.0.1", port=8765, log_level="warning", access_log=False)

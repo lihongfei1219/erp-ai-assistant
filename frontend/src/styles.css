@@ -8,6 +8,47 @@
   font-weight: 400;
   font-size: 14px;
 }
+.feishu-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 22px;
+}
+.feishu-main, .feishu-aside { min-width: 0; }
+.feishu-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 5px 26px 22px;
+}
+.feishu-controls label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.feishu-controls input { accent-color: #32776d; }
+.feishu-card { margin: 0 26px; border: 1px solid #dce4e2; border-radius: 10px; overflow: hidden; }
+.feishu-card header { display: flex; align-items: center; gap: 10px; background: #e8f2f8; padding: 18px 20px; color: #245476; }
+.feishu-card.partial header { background: #fff1dc; color: #8b5c20; }
+.feishu-message { padding: 22px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 2; }
+.feishu-send { display: flex; align-items: flex-start; flex-direction: column; gap: 13px; padding: 24px 26px; }
+.feishu-send small { color: #7a8584; }
+.feishu-success { display: flex; align-items: center; gap: 6px; color: #277563; }
+.feishu-status { margin: 0 26px 20px; }
+.feishu-aside { display: grid; gap: 20px; }
+.feishu-aside .panel { margin: 0; }
+.feishu-schedule { display: block; font-size: 15px; margin-top: 16px; }
+.feishu-aside p, .feishu-aside li { font-size: 12px; line-height: 1.9; color: #657574; margin-top: 12px; }
+.feishu-aside ol { padding-left: 18px; }
+.feishu-aside code { overflow-wrap: anywhere; font-size: 11px; }
+.feishu-aside h3 { display: flex; align-items: center; gap: 8px; }
+@media (max-width: 950px) {
+  .feishu-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 750px) {
+  .feishu-card { margin: 0 16px; }
+  .feishu-controls, .feishu-send { padding-left: 16px; padding-right: 16px; }
+  .feishu-message { padding: 16px; font-size: 12px; }
+}
 * {
   box-sizing: border-box;
 }

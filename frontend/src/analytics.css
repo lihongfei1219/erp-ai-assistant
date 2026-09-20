@@ -1,0 +1,185 @@
+.analytics-workspace {
+  display: grid;
+  gap: 20px;
+  margin-top: 24px;
+  min-width: 0;
+}
+.analytics-input,
+.analytics-result {
+  padding: 24px;
+  min-width: 0;
+}
+.analytics-title {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+.analytics-title svg {
+  color: #32776d;
+  margin-top: 3px;
+}
+.analytics-title p,
+.analytics-hint {
+  color: #657574;
+  line-height: 1.8;
+  font-size: 12px;
+}
+.analytics-input label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.analytics-input textarea,
+.analytics-input select,
+.analytics-input input,
+.analytics-dialog select {
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid #dce4e2;
+  border-radius: 7px;
+  background: white;
+  color: #243738;
+  min-width: 0;
+}
+.analytics-input textarea {
+  width: 100%;
+  resize: vertical;
+  margin: 10px 0;
+  line-height: 1.7;
+}
+.analytics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.analytics-actions small {
+  color: #657574;
+  font-size: 12px;
+}
+.analytics-fields {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.analytics-fields label {
+  min-width: 130px;
+  flex: 1;
+}
+.analytics-fields input[type="number"] {
+  max-width: 130px;
+}
+.analytics-results {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.analytics-understanding {
+  padding: 18px 22px;
+  background: #edf6f3;
+  border: 1px solid #cce2db;
+  border-radius: 8px;
+  color: #285d53;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.analytics-understanding p {
+  margin: 6px 0;
+}
+.analytics-result h3 {
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+.analytics-result table {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.analytics-result td small {
+  display: block;
+}
+.analytics-findings {
+  padding-left: 20px;
+  line-height: 1.9;
+  margin: 16px 0;
+}
+.analytics-chart {
+  width: 100%;
+  min-height: 330px;
+}
+.analytics-error {
+  padding: 18px;
+  border: 1px solid #e2b5a6;
+  color: #9a422a;
+  background: #fff5ee;
+  border-radius: 9px;
+}
+.analytics-evidence {
+  color: #277563;
+  background: #edf5f1;
+  border: 0;
+  padding: 7px 10px;
+  border-radius: 5px;
+}
+.analytics-input summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.analytics-input details,
+.analytics-input p {
+  overflow-wrap: anywhere;
+}
+.analytics-dialog {
+  width: min(700px, 94vw);
+  padding: 24px;
+  border: 1px solid #dce4e2;
+  border-radius: 12px;
+  max-height: 85vh;
+}
+.analytics-dialog::backdrop {
+  background: #16312b88;
+}
+.analytics-dialog .analytics-actions {
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.analytics-dialog label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.analytics-dialog h3 {
+  margin-top: 20px;
+}
+.analytics-dialog p {
+  margin: 16px 0;
+}
+@media (max-width: 750px) {
+  .shell .sidebar nav {
+    min-width: 0;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+  .shell .sidebar nav button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .shell .sidebar .brand,
+  .shell .sidebar .logout {
+    flex-shrink: 0;
+  }
+  .analytics-input,
+  .analytics-result {
+    padding: 16px;
+  }
+  .analytics-fields label {
+    min-width: 140px;
+  }
+  .analytics-fields .button {
+    width: 100%;
+  }
+}

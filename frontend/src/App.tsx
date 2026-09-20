@@ -15,6 +15,8 @@ import {
   LogOut,
   Package,
   RefreshCw,
+  Send,
+  Search,
   ShieldCheck,
   SlidersHorizontal,
   Wallet,
@@ -31,8 +33,10 @@ import {
   type Order,
   type OrdersPage,
 } from "./api";
+import { FeishuDaily } from "./FeishuDaily";
+import { Analytics } from "./Analytics";
 
-type Page = "overview" | "orders" | "rules";
+type Page = "overview" | "orders" | "rules" | "feishu" | "analytics";
 type View = "operating" | "all";
 interface Loaded {
   dashboard: Dashboard;
@@ -134,8 +138,10 @@ export function App() {
   const data = loaded?.dashboard;
   const nav = [
     { id: "overview" as const, label: "经营概览", icon: LayoutDashboard },
+    { id: "analytics" as const, label: "AI 数据分析", icon: Search },
     { id: "orders" as const, label: "订单明细", icon: ClipboardList },
     { id: "rules" as const, label: "业务口径", icon: SlidersHorizontal },
+    { id: "feishu" as const, label: "飞书日报", icon: Send },
   ];
   return (
     <div className="shell">
@@ -195,17 +201,21 @@ export function App() {
             <div>
               <div className="eyebrow">PLATFORM ANALYTICS</div>
               <h1>
-                {page === "overview"
+                {page === "analytics" ? "AI 数据分析" : page === "overview"
                   ? "经营概览"
                   : page === "orders"
                     ? "订单明细"
+                    : page === "feishu"
+                      ? "飞书销售日报"
                     : "业务口径与假设"}
               </h1>
               <p>
-                {page === "overview"
+                {page === "analytics" ? "从问题到数据、图表与可核验的结论。" : page === "overview"
                   ? "从平台订单出发，看清经营表现与成交结构。"
                   : page === "orders"
                     ? "沿着每一个数字，找到原始业务依据。"
+                    : page === "feishu"
+                      ? "让每天的销售情况，准时送达飞书群。"
                     : "先用清晰的默认规则推进，业务确认后再统一调整。"}
               </p>
             </div>
@@ -272,7 +282,7 @@ export function App() {
                   查看口径 <ArrowUpRight size={14} />
                 </button>
               </div>
-              {page !== "rules" && (
+              {(page === "overview" || page === "orders") && (
                 <div className="viewbar">
                   <div className="segmented" aria-label="订单统计口径">
                     <button
@@ -315,6 +325,12 @@ export function App() {
               )}
               {page === "rules" && (
                 <Rules data={data} token={token} onUnauthorized={logout} />
+              )}
+              {page === "feishu" && (
+                <FeishuDaily key={attempt} token={token} onUnauthorized={logout} />
+              )}
+              {page === "analytics" && (
+                <Analytics key={attempt} token={token} onUnauthorized={logout} />
               )}
               <footer>
                 <span>
@@ -1105,7 +1121,7 @@ function Rules({
           </span>
           <h2>业务假设台账</h2>
           <p>
-            集中记录状态、金额、支付退款、商家归属等 18
+            集中记录状态、金额、支付退款、商家归属等 19
             项待确认细节，包含默认做法、影响范围和后续修改位置。
           </p>
           <button className="button" disabled={busy} onClick={download}>

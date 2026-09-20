@@ -1,0 +1,173 @@
+"""Explicit connection setup for a Feishu application bot."""
+
+import argparse
+import logging
+import threading
+from pathlib import Path
+
+from app.integrations.feishu_app import (
+    DEFAULT_CONFIG,
+    DEFAULT_STATE,
+    AppConfigError,
+    ConnectionBot,
+    load_config,
+    make_client,
+    probe_bot,
+    reply_card,
+    reply_text,
+)
+from app.notifications.feishu import DeliveryError, delivery_lock
+
+
+class SafeSdkLog(logging.Handler):
+    """Only emit known status text, never SDK connection URLs, payloads or exceptions."""
+
+    def emit(self, record):
+        message = record.getMessage()
+        if "disconnected to" in message:
+            print("飞书长连接已断开，等待自动重连。", flush=True)
+        elif "connected to" in message:
+            print("飞书长连接已建立，可在后台保存长连接订阅。", flush=True)
+        elif record.levelno >= logging.WARNING:
+            print("飞书连接出现异常，请检查网络与应用配置。", flush=True)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="飞书应用机器人接入；默认只检查本地配置")
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true", help="离线检查，不连接飞书")
+    mode.add_argument("--probe", action="store_true", help="验证凭据及机器人身份，不发消息")
+    mode.add_argument("--discover", action="store_true", help="连接并记录群／用户 ID，不回复")
+    mode.add_argument("--listen", action="store_true", help="接收授权群消息并回复连接测试")
+    mode.add_argument(
+        "--sales", action="store_true", help="授权群自然语言数据分析，使用独立助手数据库"
+    )
+    parser.add_argument(
+        "--report-path",
+        type=Path,
+        default=DEFAULT_STATE.parent / "reports/platform-operating-20260916.json",
+    )
+    args = parser.parse_args(argv)
+    stop = threading.Event()
+    worker = None
+    try:
+        config = load_config(args.config)
+        print("本地应用凭据已填写（未输出凭据）。", flush=True)
+        if not (args.probe or args.discover or args.listen or args.sales):
+            try:
+                config.require_authorized_groups()
+                print("租户、群和用户授权配置已填写；可执行 --probe 或 --listen。")
+            except AppConfigError:
+                print("尚未完成群／用户授权；下一步执行 --discover。")
+            return 0
+
+        import lark_oapi as lark
+        from lark_oapi.core.log import logger
+
+        logger.handlers = [SafeSdkLog()]
+        logger.propagate = False
+        client = make_client(config)
+        bot_id = probe_bot(client)
+        print("应用凭据验证通过，机器人身份已读取。", flush=True)
+        if args.probe:
+            return 0
+        store = None
+        if args.sales:
+            from app.ai.analytics_agent import AnalyticsPlanner
+            from app.ai.model_client import ModelSettings, ModelUnavailable, load_model_settings
+            from app.core.reports import load_report
+            from app.integrations.feishu_jobs import SqlJobStore
+            from app.integrations.feishu_sales import SalesBot
+
+            config.require_authorized_groups()
+            snapshot = load_report(args.report_path)
+            if snapshot.operating is None or not snapshot.metadata.scope.all_buyers:
+                raise AppConfigError("销售模式需要包含有效销售规则的全平台快照")
+            store = SqlJobStore(config.app_id, config.tenant_key)
+            store.check()
+            interpreter = AnalyticsPlanner(ModelSettings(enabled=False))
+            try:
+                settings = load_model_settings()
+                interpreter = AnalyticsPlanner(settings)
+                if settings.enabled:
+                    print(
+                        "六类自然语言分析已启用；模型仅接收问题、日期与上次结构化计划。", flush=True
+                    )
+                else:
+                    print("模型未配置，使用固定指令查询。", flush=True)
+            except ModelUnavailable as exc:
+                print(str(exc), flush=True)
+            bot = SalesBot(
+                lambda: load_config(args.config),
+                bot_id,
+                store,
+                lambda: load_report(args.report_path),
+                analysis_planner=interpreter,
+            )
+            print("销售问数模式已就绪，任务保存在独立助手数据库。", flush=True)
+        else:
+            bot = ConnectionBot(config, bot_id, DEFAULT_STATE, discover=args.discover)
+
+        def receive(data):
+            result = bot.accept(data)
+            if result == "discovered":
+                print("已发现群和用户标识：.local/feishu-app/discovery.json（未回复）", flush=True)
+            elif result == "queued":
+                print("授权消息已入队。", flush=True)
+            elif result == "busy":
+                print("已有查询处理中，等待提示已入队。", flush=True)
+
+        def process():
+            while not stop.wait(0.5):
+                try:
+                    options = (
+                        {"card_sender": lambda mid, card, key: reply_card(client, mid, card, key)}
+                        if args.sales
+                        else {}
+                    )
+                    count = bot.process_pending(
+                        lambda message_id, text, key: reply_text(client, message_id, text, key),
+                        **options,
+                    )
+                    if count:
+                        print("机器人回复已发送。", flush=True)
+                except Exception:
+                    print("机器人任务暂未完成，请检查助手库、本地配置和状态。", flush=True)
+
+        handler = (
+            lark.EventDispatcherHandler.builder("", "")
+            .register_p2_im_message_receive_v1(receive)
+            .build()
+        )
+        # One connection process per app/local state directory; no competing consumers.
+        with delivery_lock(DEFAULT_STATE / "connection.lock"):
+            if store is not None:
+                store.recover()
+            if args.listen or args.sales:
+                worker = threading.Thread(target=process, daemon=True)
+                worker.start()
+            print("正在建立长连接；按 Ctrl+C 停止。", flush=True)
+            lark.ws.Client(
+                config.app_id,
+                config.app_secret.get_secret_value(),
+                event_handler=handler,
+                log_level=lark.LogLevel.INFO,
+            ).start()
+        return 0
+    except (AppConfigError, DeliveryError) as exc:
+        print(str(exc), flush=True)
+        return 1
+    except KeyboardInterrupt:
+        return 0
+    except Exception:
+        print("连接未完成，请检查网络、应用设置及本地配置；没有输出原始异常或凭据。")
+        return 1
+    finally:
+        stop.set()
+        if worker is not None:
+            worker.join(timeout=20)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

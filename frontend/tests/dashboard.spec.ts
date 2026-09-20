@@ -153,3 +153,18 @@ test("desktop renders cleanly with no runtime exceptions", async ({ page }) => {
   });
   expect(errors).toEqual([]);
 });
+
+test("Feishu demo previews September 16 and does not send without configuration", async ({ page }) => {
+  await login(page);
+  await page.getByRole("button", { name: "飞书日报", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "飞书销售日报", exact: true })).toBeVisible();
+  await expect(page.getByTestId("feishu-preview")).toContainText("2026-09-16");
+  await expect(page.getByTestId("feishu-preview")).toContainText("当日数据不完整");
+  await expect(page.getByTestId("feishu-preview")).toContainText("演示");
+  await expect(page.getByRole("button", { name: "发送演示日报到飞书群" })).toBeDisabled();
+  await expect(page.getByText("每天 08:00 · Asia/Shanghai", { exact: true })).toBeVisible();
+  await page.screenshot({ path: "../.local/feishu-preview-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  await page.screenshot({ path: "../.local/feishu-preview-mobile.png", fullPage: true });
+});
