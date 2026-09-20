@@ -1,4 +1,4 @@
-"""Development-only immutable snapshots. Production assistant DB remains planned."""
+"""Immutable analysis snapshots; Feishu task persistence lives in the assistant DB."""
 
 import os
 import tempfile

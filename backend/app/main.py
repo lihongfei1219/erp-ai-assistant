@@ -7,8 +7,10 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
+from app.analysis.api import register_analysis_routes
 from app.core.reports import load_report
 from app.core.settings import ApiSettings
+from app.notifications.api import register_feishu_routes
 from app.schemas.sales import (
     Breakdown,
     DailyPoint,
@@ -77,7 +79,8 @@ class OperatingResponse(StrictModel):
 
 
 def create_app(
-    settings: ApiSettings | None = None, *, report: SalesReport | None = None
+    settings: ApiSettings | None = None, *, report: SalesReport | None = None,
+    analysis_planner=None,
 ) -> FastAPI:
     settings = settings or ApiSettings.from_env()
     application = FastAPI(
@@ -118,6 +121,7 @@ def create_app(
 
     def reject_unknown_filters(request: Request):
         allowed = {
+            "/api/v1/feishu/daily": {"day", "demo"},
             "/api/v1/orders": {"page", "page_size", "view"},
             "/api/v1/sales/breakdown": {"dimension", "limit"},
         }.get(request.url.path, set())
@@ -228,7 +232,16 @@ def create_app(
             raise HTTPException(404, "订单不在当前快照范围内")
         return EvidenceResponse(metadata=result.metadata, item=item)
 
+    register_analysis_routes(router, get_report, analysis_planner)
+    register_feishu_routes(router, get_report)
     application.include_router(router)
+
+    @application.get("/assets/analytics-plotly.js", include_in_schema=False)
+    def plotly_library():
+        import plotly
+        path = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
+        return FileResponse(path, media_type="application/javascript")
+
     frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if frontend_dist.is_dir():
         application.mount("/", StaticFiles(directory=frontend_dist, html=True), name="web")
