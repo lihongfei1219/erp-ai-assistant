@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 LOCAL_SOURCE_ODBC = (
@@ -10,14 +10,12 @@ LOCAL_SOURCE_ODBC = (
 
 @dataclass(frozen=True)
 class ApiSettings:
-    token: str = field(repr=False)
     report_path: Path | None = None
 
     @classmethod
     def from_env(cls):
         value = os.environ.get("ERP_REPORT_PATH")
         return cls(
-            token=os.environ.get("ERP_API_TOKEN", ""),
             report_path=Path(value) if value else None,
         )
 

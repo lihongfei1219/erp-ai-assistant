@@ -37,5 +37,7 @@ report = analyze_sales(SalesExtract(pd.DataFrame(rows), pd.DataFrame(lines), 12,
 os.environ["FEISHU_WEBHOOK_URL"] = ""
 os.environ["FEISHU_WEBHOOK_SECRET"] = ""
 os.environ["ERP_AI_ENABLED"] = "0"
-application = create_app(ApiSettings(token="browser-test-token-0123456789abcdef"), report=report)
+from operations_fixture import with_operations
+report = with_operations(report)
+application = create_app(ApiSettings(), report=report)
 uvicorn.run(application, host="127.0.0.1", port=8765, log_level="warning", access_log=False)

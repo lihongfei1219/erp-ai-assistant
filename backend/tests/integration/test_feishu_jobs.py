@@ -189,3 +189,82 @@ def test_clear_is_a_barrier_even_when_its_delivery_finishes_after_next_question_
         )
         connection.commit()
     assert store.latest_analysis_context(current) is None
+
+
+def test_delivered_semantic_clarification_is_durable_context(store):
+    payload = {
+        "kind": "semantic_notice",
+        "snapshot_key": "synthetic",
+        "status": "clarify",
+        "notice": "请补充统计日期",
+        "semantic_context": {"intents": [{"domain": "sales"}], "pending": ["time"]},
+    }
+    store.enqueue(identity(), payload)
+    previous = store.claim()
+    assert store.finish_analysis(
+        previous, {"semantic_status": "clarify"}, "synthetic clarification"
+    )
+    outgoing = store.next_reply()
+    store.mark(outgoing["job_id"], "sent")
+    store.enqueue(
+        identity("om_semantic_follow", "evt_semantic_follow"), {"kind": "analysis_question"}
+    )
+    current = store.claim()
+    assert SqlJobStore(store.app_id, store.tenant_key).latest_analysis_context(current) == payload
+    with store.connection() as connection:
+        connection.execute(
+            "UPDATE erp_ai.feishu_sales_jobs SET status='unknown' WHERE job_id=?",
+            previous["job_id"],
+        )
+        connection.commit()
+    assert store.latest_analysis_context(current) is None
+
+
+def deliver_guidance(store, sequence, *, round_id, status="sent"):
+    payload = {
+        "kind": "semantic_notice", "status": "needs_input",
+        "semantic_context": {"dialogue_id": round_id},
+        "dialogue_turn": {"choices": [{"id": "synthetic-choice"}]},
+    }
+    store.enqueue(identity(f"om_guide_{sequence}", f"evt_guide_{sequence}"), payload)
+    job = store.claim()
+    assert store.finish_analysis(job, {"semantic_status": "needs_input"}, "synthetic guide")
+    outgoing = store.next_reply()
+    store.mark(outgoing["job_id"], status)
+    return payload
+
+
+def numbered_reply(store, sequence="next"):
+    store.enqueue(
+        identity(f"om_number_{sequence}", f"evt_number_{sequence}"),
+        {"kind": "analysis_question", "question": "1"},
+    )
+    return store.claim()
+
+
+def test_numbered_context_survives_restart_and_is_identity_scoped(store):
+    payload = deliver_guidance(store, 1, round_id="round-1")
+    current = numbered_reply(store)
+    reopened = SqlJobStore(store.app_id, store.tenant_key)
+    assert reopened.latest_numbered_choice_context(current) == payload
+    assert reopened.latest_numbered_choice_context(dict(current, chat_id="another")) is None
+    assert reopened.latest_numbered_choice_context(dict(current, user_open_id="another")) is None
+    assert SqlJobStore("another", store.tenant_key).latest_numbered_choice_context(current) is None
+    assert SqlJobStore(store.app_id, "another").latest_numbered_choice_context(current) is None
+
+
+@pytest.mark.parametrize("intervening", ["another_guide", "failed_question", "unknown", "clear"])
+def test_numbered_context_does_not_rebind_after_another_round_or_question(store, intervening):
+    deliver_guidance(store, 1, round_id="round-1")
+    if intervening in {"another_guide", "unknown"}:
+        deliver_guidance(
+            store, 2, round_id="round-2", status="unknown" if intervening == "unknown" else "sent",
+        )
+    else:
+        job = numbered_reply(store, "intervening")
+        kind = "clear_context" if intervening == "clear" else "analysis_planning"
+        assert store.replace_payload(job, {"kind": kind})
+        assert store.finish_analysis(job, {}, "synthetic")
+        outgoing = store.next_reply()
+        store.mark(outgoing["job_id"], "sent")
+    assert store.latest_numbered_choice_context(numbered_reply(store)) is None

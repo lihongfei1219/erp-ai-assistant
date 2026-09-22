@@ -4,13 +4,12 @@ from fastapi.testclient import TestClient
 from app.core.settings import ApiSettings
 from app.main import create_app
 
-TOKEN = "synthetic-test-token-0123456789abcdef"
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+HEADERS = {}
 
 
 @pytest.fixture
 def client(report):
-    return TestClient(create_app(ApiSettings(token=TOKEN), report=report))
+    return TestClient(create_app(ApiSettings(), report=report))
 
 
 @pytest.mark.parametrize(
@@ -25,10 +24,13 @@ def client(report):
         "/orders/1",
     ],
 )
-def test_all_business_endpoints_require_auth(client, path):
-    assert client.get("/api/v1" + path).status_code == 401
+def test_local_business_endpoints_work_without_access_token(client, path):
+    assert client.get("/api/v1" + path).status_code == 200
     assert (
-        client.get("/api/v1" + path, headers={"Authorization": "Bearer wrong"}).status_code == 401
+        client.get(
+            "/api/v1" + path, headers={"Authorization": "Bearer old-unused-token"}
+        ).status_code
+        == 200
     )
 
 
@@ -63,13 +65,13 @@ def test_evidence_pagination_and_detail(client):
     assert len(client.get("/api/v1/orders/1", headers=HEADERS).json()["item"]["lines"]) == 2
 
 
-def test_absent_token_fails_closed(report):
-    client = TestClient(create_app(ApiSettings(token=""), report=report))
-    assert client.get("/api/v1/dashboard/summary", headers=HEADERS).status_code == 503
+def test_absent_access_token_does_not_block_local_snapshot(report):
+    client = TestClient(create_app(ApiSettings(), report=report))
+    assert client.get("/api/v1/dashboard/summary").status_code == 200
 
 
 def test_missing_report_returns_unavailable_not_zero():
-    client = TestClient(create_app(ApiSettings(token=TOKEN)))
+    client = TestClient(create_app(ApiSettings()))
     assert client.get("/api/v1/dashboard/summary", headers=HEADERS).status_code == 503
     assert client.get("/healthz").status_code == 200
 
@@ -77,7 +79,7 @@ def test_missing_report_returns_unavailable_not_zero():
 def test_corrupt_snapshot_returns_unavailable(tmp_path):
     path = tmp_path / "bad.json"
     path.write_text("not json", encoding="utf-8")
-    client = TestClient(create_app(ApiSettings(token=TOKEN, report_path=path)))
+    client = TestClient(create_app(ApiSettings(report_path=path)))
     assert client.get("/api/v1/data/status", headers=HEADERS).status_code == 503
 
 
@@ -91,6 +93,7 @@ def test_cannot_select_another_snapshot_or_inject_scope(client):
 
 def test_openapi_is_available(client):
     assert client.get("/openapi.json").status_code == 200
+    assert "securitySchemes" not in client.get("/openapi.json").json().get("components", {})
 
 
 def test_restricted_snapshot_cannot_expose_another_buyer(extract, window, source_as_of):
@@ -109,7 +112,7 @@ def test_restricted_snapshot_cannot_expose_another_buyer(extract, window, source
         source_as_of=source_as_of,
         synthetic=True,
     )
-    client = TestClient(create_app(ApiSettings(token=TOKEN), report=scoped))
+    client = TestClient(create_app(ApiSettings(), report=scoped))
     assert client.get("/api/v1/orders/3", headers=HEADERS).status_code == 404
     response = client.get("/api/v1/dashboard/summary", headers=HEADERS).json()
     assert response["summary"]["order_amount"] == "300.0000"

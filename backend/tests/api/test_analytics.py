@@ -8,8 +8,7 @@ from app.core.business_rules import load_business_rules
 from app.core.settings import ApiSettings
 from app.main import create_app
 
-TOKEN = "analytics-test-token-0123456789abcdef"
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+HEADERS = {}
 
 
 @pytest.fixture
@@ -26,7 +25,7 @@ def analytics_report(extract, window, scope, source_as_of):
 
 @pytest.fixture
 def client(analytics_report):
-    return TestClient(create_app(ApiSettings(token=TOKEN), report=analytics_report))
+    return TestClient(create_app(ApiSettings(), report=analytics_report))
 
 
 def step(kind="summary", **kwargs):
@@ -74,6 +73,47 @@ def test_comparison_reconciles_all_dimension_changes(client):
     assert "因果" in "".join(result["notes"])
 
 
+@pytest.mark.parametrize("metric", ["amount", "orders"])
+def test_sales_ascending_selects_lowest_before_limit_and_orders_chart(client, metric):
+    response = run(client, step("product_ranking", metric=metric, order="ascending", top_n=1))
+    assert response.status_code == 200
+    result = response.json()["results"][0]
+    assert [r["code"] for r in result["rows"]] == ["SKU-B"]
+    assert result["rows"][0]["amount"] == "40.0000"
+    assert result["rows"][0]["evidence_ids"] == [1]
+    assert result["totals"]["total_groups"] == 2
+    assert result["chart"]["data"][0]["y"] == ([40.0] if metric == "amount" else [1.0])
+    assert "从低到高" in "".join(result["notes"])
+
+
+@pytest.mark.parametrize("direction", ["ascending", "descending"])
+@pytest.mark.parametrize("metric", ["amount", "orders"])
+def test_buyer_ranking_direction_and_stable_ties(
+    extract, window, scope, source_as_of, direction, metric
+):
+    extract.orders.loc[extract.orders.order_id == 2, "buyer_code"] = "BUYER-B"
+    report = analyze_sales(
+        extract,
+        window,
+        scope,
+        source_as_of=source_as_of,
+        rules=load_business_rules(),
+        synthetic=True,
+    )
+    client = TestClient(create_app(ApiSettings(), report=report))
+    result = run(client, step("buyer_ranking", metric=metric, order=direction)).json()["results"][0]
+    expected = (
+        ["BUYER-B", "BUYER-A"]
+        if metric == "amount" and direction == "descending"
+        else ["BUYER-A", "BUYER-B"]
+    )
+    assert [r["code"] for r in result["rows"]] == expected
+
+
+def test_nonranking_does_not_accept_ascending(client):
+    assert run(client, step("summary", order="ascending")).status_code == 422
+
+
 def test_empty_period_has_zero_amount_but_null_average(client):
     response = run(
         client, dict(kind="summary", start_date="2026-09-03", end_date_exclusive="2026-09-04")
@@ -105,10 +145,9 @@ def test_invalid_or_unavailable_requests_are_not_silently_changed(client, change
     assert run(client, step() | change).status_code == 422
 
 
-def test_endpoints_require_auth_and_reject_unknown_filters(client):
-    assert client.get("/api/v1/analysis/catalog").status_code == 401
-    assert client.post("/api/v1/analysis/run", json={"steps": [step()]}).status_code == 401
-    assert client.post("/api/v1/analysis/ask", json={"question": "销售额"}).status_code == 401
+def test_local_endpoints_allow_direct_access_and_reject_unknown_filters(client):
+    assert client.get("/api/v1/analysis/catalog").status_code == 200
+    assert client.post("/api/v1/analysis/run", json={"steps": [step()]}).status_code == 200
     assert client.get("/api/v1/analysis/catalog?buyer=other", headers=HEADERS).status_code == 422
 
 
@@ -134,7 +173,7 @@ def test_restricted_snapshot_retains_scope(extract, window, source_as_of):
         rules=load_business_rules(),
         synthetic=True,
     )
-    client = TestClient(create_app(ApiSettings(token=TOKEN), report=report))
+    client = TestClient(create_app(ApiSettings(), report=report))
     response = run(client, step("buyer_ranking"))
     assert response.status_code == 200
     assert response.json()["provenance"]["scope"]["buyer_codes"] == ["BUYER-A"]
@@ -189,10 +228,10 @@ def test_partial_day_and_corrupt_evidence_are_rejected(analytics_report):
             )
         }
     )
-    client = TestClient(create_app(ApiSettings(token=TOKEN), report=partial))
+    client = TestClient(create_app(ApiSettings(), report=partial))
     assert run(client, step()).status_code == 422
     corrupt = analytics_report.model_copy(update={"evidence": analytics_report.evidence[1:]})
-    client = TestClient(create_app(ApiSettings(token=TOKEN), report=corrupt))
+    client = TestClient(create_app(ApiSettings(), report=corrupt))
     assert run(client, step()).status_code == 422
 
 
@@ -213,7 +252,7 @@ def test_ask_runs_typed_plan_without_business_data_in_model_context(analytics_re
             return PlanDecision(action="run", plan={"steps": [step()]})
 
     client = TestClient(
-        create_app(ApiSettings(token=TOKEN), report=analytics_report, analysis_planner=Planner())
+        create_app(ApiSettings(), report=analytics_report, analysis_planner=Planner())
     )
     response = client.post(
         "/api/v1/analysis/ask", headers=HEADERS, json={"question": "2026-09-01至2026-09-03销售概览"}
@@ -232,7 +271,7 @@ def test_ask_clarifies_instead_of_executing_partial_request(analytics_report):
             )
 
     client = TestClient(
-        create_app(ApiSettings(token=TOKEN), report=analytics_report, analysis_planner=Planner())
+        create_app(ApiSettings(), report=analytics_report, analysis_planner=Planner())
     )
     response = client.post("/api/v1/analysis/ask", headers=HEADERS, json={"question": "利润"})
     assert response.status_code == 422
@@ -273,7 +312,7 @@ def test_colloquial_drug_question_runs_and_explains_actual_scope(
 
     client = TestClient(
         create_app(
-            ApiSettings(token=TOKEN),
+            ApiSettings(),
             report=analytics_report,
             analysis_planner=Planner(),
         )
@@ -315,9 +354,7 @@ def test_model_cannot_ignore_question_conditions(analytics_report, question):
             return PlanDecision(action="run", plan={"steps": [step()]})
 
     client = TestClient(
-        create_app(
-            ApiSettings(token=TOKEN), report=analytics_report, analysis_planner=WrongPlanner()
-        )
+        create_app(ApiSettings(), report=analytics_report, analysis_planner=WrongPlanner())
     )
     response = client.post("/api/v1/analysis/ask", headers=HEADERS, json={"question": question})
     assert response.status_code == 422
@@ -336,7 +373,7 @@ def test_chart_distinguishes_same_named_products(analytics_report):
         for order in analytics_report.evidence
     ]
     report = analytics_report.model_copy(update={"evidence": orders})
-    client = TestClient(create_app(ApiSettings(token=TOKEN), report=report))
+    client = TestClient(create_app(ApiSettings(), report=report))
     result = run(client, step("product_ranking")).json()["results"][0]
     assert len(set(result["chart"]["data"][0]["x"])) == 2
     assert result["chart"]["data"][0]["y"] == [260.0, 40.0]

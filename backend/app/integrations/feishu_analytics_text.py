@@ -51,7 +51,7 @@ def _blocks(response: AnalysisResponse, row_limit: int) -> list[str]:
         f"{source} · {scope} · {p.currency}\n"
         f"数据截至 {p.source_as_of.astimezone(ZoneInfo(p.business_timezone)):%Y-%m-%d %H:%M} "
         f"（{p.business_timezone}）\n"
-        f"纳入状态：{'、'.join(p.included_statuses)}；非支付成交额，未扣退款。\n"
+        f"销售纳入状态：{'、'.join(p.included_statuses)}；其他业务口径见各项说明；非资金收付，销售未扣退款。\n"
         f"规则版本：{p.policy_id}；查询编号：{response.run_id}\n"
         "30分钟内可继续 @我 追问；发送“清除追问上下文”重新开始。"
     )

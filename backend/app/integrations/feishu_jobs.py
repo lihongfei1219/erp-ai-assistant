@@ -5,6 +5,7 @@ import json
 import os
 import uuid
 from contextlib import contextmanager
+from datetime import timedelta
 
 import pyodbc
 
@@ -17,6 +18,43 @@ DEFAULT_ASSISTANT_ODBC = (
 
 class JobStoreError(ValueError):
     pass
+
+
+def numbered_choice_context(rows: list[dict], arrived_at) -> dict | None:
+    """Accept a bare number only when it has exactly one recently displayed meaning.
+
+    Rows are newest-first and already isolated by application, tenant, chat and user.
+    Unknown delivery can have displayed a card, so it contributes to ambiguity too.
+    """
+    cutoff = arrived_at - timedelta(minutes=30)
+    history = []
+    for row in rows:
+        if row["payload"].get("kind") in {"help", "coverage", "ping"}:
+            continue
+        if row["payload"].get("kind") == "clear_context":
+            break
+        if row["created_at"] < cutoff and row.get("updated_at", row["created_at"]) < cutoff:
+            continue
+        history.append(row)
+    if not history:
+        return None
+    latest = history[0]
+    payload = latest["payload"]
+    if (
+        latest["status"] != "sent"
+        or not cutoff <= latest.get("updated_at", latest["created_at"]) <= arrived_at
+        or payload.get("kind") != "semantic_notice"
+        or not latest.get("result", {}).get("semantic_status")
+        or not payload.get("dialogue_turn", {}).get("choices")
+    ):
+        return None
+    rounds = {
+        row["payload"].get("semantic_context", {}).get("dialogue_id")
+        for row in history
+        if row["payload"].get("dialogue_turn", {}).get("choices")
+        and row["status"] in {"sent", "unknown", "sending"}
+    }
+    return payload if len(rounds) == 1 and None not in rounds else None
 
 
 class SqlJobStore:
@@ -44,14 +82,17 @@ class SqlJobStore:
             connection.execute("SELECT TOP (0) job_id FROM erp_ai.feishu_sales_jobs")
 
     def latest_analysis_context(self, job: dict) -> dict | None:
-        """Only this person's successfully delivered plan, in this group, for 30 minutes."""
+        """Only delivered plans/semantic notices, with the same identity and clear barrier."""
         with self.connection() as connection:
             row = connection.execute(
                 "SELECT TOP (1) payload_json FROM erp_ai.feishu_sales_jobs "
                 "WHERE app_id=? AND tenant_key=? AND chat_id=? AND user_open_id=? "
                 "AND created_at <= ? AND job_id<>? "
-                "AND ((JSON_VALUE(payload_json,'$.kind')='analysis' AND status='sent' "
-                "AND JSON_VALUE(result_json,'$.run_id') IS NOT NULL "
+                "AND ((status='sent' AND ("
+                "(JSON_VALUE(payload_json,'$.kind')='analysis' "
+                "AND JSON_VALUE(result_json,'$.run_id') IS NOT NULL) OR "
+                "(JSON_VALUE(payload_json,'$.kind')='semantic_notice' "
+                "AND JSON_VALUE(result_json,'$.semantic_status') IS NOT NULL)) "
                 "AND updated_at <= ? AND updated_at >= DATEADD(minute,-30,CAST(? AS datetime2))) "
                 "OR (JSON_VALUE(payload_json,'$.kind')='clear_context' "
                 "AND status IN ('queued','analyzing','ready','sending','sent','unknown'))) "
@@ -66,7 +107,43 @@ class SqlJobStore:
                 job["created_at"],
             ).fetchone()
         payload = json.loads(row[0]) if row else None
-        return payload if payload and payload.get("kind") == "analysis" else None
+        if payload and payload.get("kind") in {"analysis", "semantic_notice"}:
+            return payload
+        return None
+
+    def latest_numbered_choice_context(self, job: dict) -> dict | None:
+        """Do not silently apply an old card's number to a newer pending question."""
+        with self.connection() as connection:
+            rows = connection.execute(
+                "SELECT TOP (101) payload_json,status,created_at,updated_at,result_json "
+                "FROM erp_ai.feishu_sales_jobs "
+                "WHERE app_id=? AND tenant_key=? AND chat_id=? AND user_open_id=? "
+                "AND created_at <= ? AND job_id<>? "
+                "AND (created_at >= DATEADD(minute,-30,CAST(? AS datetime2)) "
+                "OR updated_at >= DATEADD(minute,-30,CAST(? AS datetime2))) "
+                "ORDER BY created_at DESC,job_id DESC",
+                self.app_id,
+                self.tenant_key,
+                job["chat_id"],
+                job["user_open_id"],
+                job["created_at"],
+                job["job_id"],
+                job["created_at"],
+                job["created_at"],
+            ).fetchall()
+        if len(rows) > 100:
+            return None
+        history = [
+            {
+                "payload": json.loads(row[0]),
+                "status": row[1],
+                "created_at": row[2],
+                "updated_at": row[3],
+                "result": json.loads(row[4] or "{}"),
+            }
+            for row in rows
+        ]
+        return numbered_choice_context(history, job["created_at"])
 
     def enqueue(self, identity: dict, payload: dict) -> str:
         values = {**identity, "app_id": self.app_id, "tenant_key": self.tenant_key}

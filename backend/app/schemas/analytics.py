@@ -8,15 +8,25 @@ from pydantic import Field, model_validator
 from app.schemas.sales import DataScope, StrictModel
 
 AnalysisKind = Literal[
-    "summary", "trend", "buyer_ranking", "product_ranking", "comparison", "anomalies"
+    "summary",
+    "trend",
+    "buyer_ranking",
+    "product_ranking",
+    "comparison",
+    "anomalies",
+    "list",
+    "existence",
 ]
+BusinessDomain = Literal["sales", "returns", "shipping", "inventory"]
 
 
 class AnalysisStep(StrictModel):
+    domain: BusinessDomain = "sales"
     kind: AnalysisKind
     start_date: date
     end_date_exclusive: date
-    metric: Literal["amount", "orders"] = "amount"
+    metric: Literal["amount", "orders", "quantity", "stock"] = "amount"
+    order: Literal["descending", "ascending"] = "descending"
     top_n: int = Field(default=10, ge=1, le=50, strict=True)
     dimension: Literal["product", "buyer"] = "product"
     comparison_start_date: date | None = None
@@ -27,6 +37,37 @@ class AnalysisStep(StrictModel):
         days = (self.end_date_exclusive - self.start_date).days
         if not 1 <= days <= 90:
             raise ValueError("分析区间必须为 1 至 90 个完整日")
+        if self.domain != "sales":
+            allowed = {"summary", "product_ranking", "list", "existence"}
+            if self.domain != "inventory":
+                allowed |= {"trend", "buyer_ranking"}
+            if self.kind not in allowed:
+                raise ValueError("该业务不支持此分析方式")
+            metrics = (
+                {"stock", "quantity"}
+                if self.domain == "inventory"
+                else {"amount", "orders", "quantity"}
+            )
+            if self.metric not in metrics:
+                raise ValueError("该业务不支持此指标")
+            if self.domain == "inventory" and days != 1:
+                raise ValueError("库存必须指定单一时点日期")
+            if (
+                self.comparison_start_date is not None
+                or self.comparison_end_date_exclusive is not None
+            ):
+                raise ValueError("当前业务未接入期间比较")
+            if self.dimension != "product" and (self.kind != "list" or self.domain == "inventory"):
+                raise ValueError("请通过客户排行选择客户维度")
+            if self.kind not in {"product_ranking", "buyer_ranking", "list"} and self.top_n != 10:
+                raise ValueError("只有排行或明细接受展示条数")
+            if self.kind not in {"product_ranking", "buyer_ranking"} and self.order != "descending":
+                raise ValueError("只有排行接受排序方向")
+            return self
+        if self.metric not in {"amount", "orders"} or self.kind in {"list", "existence"}:
+            raise ValueError("销售尚未支持此分析或指标")
+        if self.kind not in {"product_ranking", "buyer_ranking"} and self.order != "descending":
+            raise ValueError("只有排行接受排序方向")
         if self.kind in {"summary", "comparison", "anomalies"} and self.metric != "amount":
             raise ValueError("该分析使用订单金额口径")
         if self.kind == "comparison":
@@ -53,6 +94,7 @@ class AnalysisPlan(StrictModel):
 class AnalysisQuestion(StrictModel):
     question: str = Field(min_length=1, max_length=1000)
     previous_plan: AnalysisPlan | None = None
+    conversation_token: str | None = Field(default=None, min_length=1, max_length=60000)
 
     @model_validator(mode="after")
     def not_blank(self):
@@ -77,6 +119,7 @@ class PlanDecision(StrictModel):
 
 
 class AnalysisResult(StrictModel):
+    domain: BusinessDomain = "sales"
     kind: AnalysisKind
     title: str
     columns: dict[str, str]
@@ -108,3 +151,4 @@ class AnalysisResponse(StrictModel):
     results: list[AnalysisResult]
     warnings: list[str]
     interpretation: list[str] = Field(default_factory=list)
+    conversation_token: str | None = None

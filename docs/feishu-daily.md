@@ -35,7 +35,7 @@ Set-Location backend
 ..\.venv\Scripts\python.exe -m workers.feishu_daily --date 2026-09-16 --demo --send
 ```
 
-接口均需现有 Bearer 开发令牌：
+本机接口无需访问令牌；飞书发送仍需服务端配置Webhook：
 
 | 方法与路径 | 用途 |
 |---|---|

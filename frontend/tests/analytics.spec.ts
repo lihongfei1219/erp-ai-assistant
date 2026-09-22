@@ -1,11 +1,24 @@
 import { test, expect, type Page } from "@playwright/test";
 
+function turn(result: unknown, overrides: Record<string, unknown> = {}) {
+  return {
+    status: "result",
+    understood_summary: "按指定日期分析销售数据。",
+    draft: { intents: [] },
+    clarification: null,
+    choices: [],
+    applied_defaults: [],
+    allow_free_text: true,
+    conversation_token: "result-context",
+    result,
+    repeated_clarification: false,
+    available_dates: { start: "2026-09-01", end_exclusive: "2026-09-16" },
+    ...overrides,
+  };
+}
+
 async function enter(page: Page) {
   await page.goto("/");
-  await page
-    .getByLabel("访问令牌", { exact: true })
-    .fill("browser-test-token-0123456789abcdef");
-  await page.getByRole("button", { name: "进入工作台" }).click();
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
   await expect(page.getByLabel("开始日期", { exact: true })).toHaveValue(
     "2026-09-01",
@@ -68,20 +81,28 @@ test("question, follow-up and clarification preserve the expected context", asyn
     });
   });
   let calls = 0;
-  await page.route("**/api/v1/analysis/ask", async (route) => {
+  await page.route("**/api/v1/analysis/converse", async (route) => {
     const body = route.request().postDataJSON();
     calls += 1;
-    if (calls === 1) expect(body.previous_plan).toBeNull();
-    else expect(body.previous_plan.steps[0].start_date).toBe("2026-09-01");
+    if (calls === 1) expect(body.conversation_token).toBeNull();
+    else expect(body.conversation_token).toBe("result-context");
     if (calls === 3) {
       await route.fulfill({
-        status: 422,
-        json: { detail: "缺少成本数据，无法计算利润" },
+        json: turn(null, {
+          status: "capability_gap",
+          understood_summary: "希望继续分析利润。",
+          clarification: {
+            id: "profit",
+            intent_id: null,
+            field: "metric",
+            kind: "unsupported",
+            question: "缺少成本数据，无法计算利润。是否改看销售金额？",
+          },
+        }),
       });
       return;
     }
     const response = await page.request.post("/api/v1/analysis/run", {
-      headers: { Authorization: "Bearer browser-test-token-0123456789abcdef" },
       data: {
         steps: [
           {
@@ -92,7 +113,7 @@ test("question, follow-up and clarification preserve the expected context", asyn
         ],
       },
     });
-    await route.fulfill({ response });
+    await route.fulfill({ json: turn(await response.json()) });
   });
   await enter(page);
   await page
@@ -100,6 +121,9 @@ test("question, follow-up and clarification preserve the expected context", asyn
     .fill("9月1日至7日销售概览");
   await page.getByRole("button", { name: "开始智能分析" }).click();
   await expect(page.getByTestId("analysis-results")).toContainText("700.0000");
+  await expect(page.getByLabel("分析问题", { exact: true })).toHaveValue(
+    "9月1日至7日销售概览",
+  );
   await page.getByLabel("分析问题", { exact: true }).fill("再看客户排行");
   await page.getByRole("button", { name: "开始智能分析" }).click();
   await expect(
@@ -109,8 +133,14 @@ test("question, follow-up and clarification preserve the expected context", asyn
   ).toBeVisible();
   await page.getByLabel("分析问题", { exact: true }).fill("再看利润");
   await page.getByRole("button", { name: "开始智能分析" }).click();
-  await expect(page.getByRole("alert")).toContainText("缺少成本数据");
+  await expect(page.getByRole("region", { name: "分析引导" })).toContainText(
+    "缺少成本数据",
+  );
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByTestId("analysis-results")).toHaveCount(0);
+  await expect(page.getByLabel("分析问题", { exact: true })).toHaveValue(
+    "再看利润",
+  );
   await page.getByRole("button", { name: "清除追问上下文" }).click();
   await expect(
     page.getByRole("button", { name: "清除追问上下文" }),
@@ -145,12 +175,11 @@ test("colloquial ranking shows understood dates, metric and product scope", asyn
       json: { ...(await response.json()), model_enabled: true },
     });
   });
-  await page.route("**/api/v1/analysis/ask", async (route) => {
+  await page.route("**/api/v1/analysis/converse", async (route) => {
     expect(route.request().postDataJSON().question).toBe(
       "分析2026年9月1日至5号的销售数据，哪些药品卖的好",
     );
     const response = await page.request.post("/api/v1/analysis/run", {
-      headers: { Authorization: "Bearer browser-test-token-0123456789abcdef" },
       data: {
         steps: [
           {
@@ -162,13 +191,13 @@ test("colloquial ranking shows understood dates, metric and product scope", asyn
       },
     });
     await route.fulfill({
-      json: {
+      json: turn({
         ...(await response.json()),
         interpretation: [
           "商品排行：2026-09-01 至 2026-09-05（含首尾两天）；按销售金额（有效订单口径）统计，从高到低展示前 10 名。",
           "“药品”按当前商品范围理解：本次未按药品类别筛选，可能包含器械、保健品等其他商品。",
         ],
-      },
+      }),
     });
   });
   await enter(page);

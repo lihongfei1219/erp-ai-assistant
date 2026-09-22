@@ -4,12 +4,17 @@ export type AnalysisKind =
   | "buyer_ranking"
   | "product_ranking"
   | "comparison"
-  | "anomalies";
+  | "anomalies"
+  | "list"
+  | "existence";
+export type BusinessDomain = "sales" | "returns" | "shipping" | "inventory";
 export interface AnalysisStep {
+  domain?: BusinessDomain;
   kind: AnalysisKind;
   start_date: string;
   end_date_exclusive: string;
-  metric?: "amount" | "orders";
+  metric?: "amount" | "orders" | "quantity" | "stock";
+  order?: "ascending" | "descending";
   top_n?: number;
   dimension?: "product" | "buyer";
   comparison_start_date?: string;
@@ -19,6 +24,7 @@ export interface AnalysisPlan {
   steps: AnalysisStep[];
 }
 export interface AnalysisCatalog {
+  semantic_domains?: Record<string, { label: string; executable: boolean }>;
   available_start: string;
   available_end_exclusive: string;
   model_enabled: boolean;
@@ -30,6 +36,7 @@ export interface Figure {
   layout: Record<string, unknown>;
 }
 export interface AnalysisResult {
+  domain?: BusinessDomain;
   kind: AnalysisKind;
   title: string;
   columns: Record<string, string>;
@@ -58,6 +65,45 @@ export interface AnalysisResponse {
   results: AnalysisResult[];
   warnings: string[];
   interpretation?: string[];
+  conversation_token?: string | null;
+}
+
+export interface DialogueRequest {
+  question?: string;
+  conversation_token: string | null;
+  choice_id?: string;
+  date_range?: { start: string; end_exclusive: string };
+}
+export interface DialogueChoice {
+  id: string;
+  label: string;
+  action: { kind: string; intent_id?: string | null; field?: string | null };
+}
+export interface DialogueIntent {
+  id: string;
+  label: string;
+  fields: Record<string, string | number | boolean | null>;
+  constraints: { id: string; label: string }[];
+  field_sources: Record<string, "explicit" | "inherited" | "default">;
+}
+export interface DialogueTurn {
+  status: "result" | "needs_input" | "capability_gap" | "data_gap";
+  understood_summary: string;
+  draft: { intents: DialogueIntent[] };
+  clarification: {
+    id: string;
+    intent_id: string | null;
+    field: string;
+    kind: string;
+    question: string;
+  } | null;
+  choices: DialogueChoice[];
+  applied_defaults: string[];
+  allow_free_text: true;
+  conversation_token: string | null;
+  result: AnalysisResponse | null;
+  repeated_clarification: boolean;
+  available_dates: { start: string; end_exclusive: string };
 }
 
 export function shiftDay(value: string, offset: number) {

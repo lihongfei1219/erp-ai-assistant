@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowUpRight,
@@ -12,7 +12,6 @@ import {
   FileText,
   Info,
   LayoutDashboard,
-  LogOut,
   Package,
   RefreshCw,
   Send,
@@ -24,7 +23,6 @@ import {
 } from "lucide-react";
 import {
   api,
-  ApiError,
   money,
   timestamp,
   type Breakdown,
@@ -62,9 +60,6 @@ function Brand() {
 }
 
 export function App() {
-  const [token, setToken] = useState(
-    () => sessionStorage.getItem("erp-access-token") || "",
-  );
   const [page, setPage] = useState<Page>("overview");
   const [view, setView] = useState<View>("operating");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -72,29 +67,21 @@ export function App() {
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
 
-  function logout() {
-    sessionStorage.removeItem("erp-access-token");
-    setToken("");
-    setLoaded(null);
-    setError("");
-  }
   useEffect(() => {
-    if (!token) return;
+    sessionStorage.removeItem("erp-access-token");
     const controller = new AbortController();
     setLoading(true);
     setLoaded(null);
     setError("");
     Promise.all([
-      api<Dashboard>("/dashboard/operating", token, controller.signal),
-      api<{ items: Daily[] }>("/sales/trends", token, controller.signal),
+      api<Dashboard>("/dashboard/operating", controller.signal),
+      api<{ items: Daily[] }>("/sales/trends", controller.signal),
       api<{ items: Breakdown[] }>(
         "/sales/breakdown?dimension=buyer&limit=10",
-        token,
         controller.signal,
       ),
       api<{ items: Breakdown[] }>(
         "/sales/breakdown?dimension=product&limit=10",
-        token,
         controller.signal,
       ),
     ])
@@ -109,32 +96,16 @@ export function App() {
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
-        if (cause instanceof ApiError && cause.status === 401) {
-          logout();
-          setError("访问令牌无效或已失效，请重新输入。");
-        } else
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "无法读取分析结果，请重试。",
-          );
+        setError(
+          cause instanceof Error ? cause.message : "无法读取分析结果，请重试。",
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [token, attempt]);
+  }, [attempt]);
 
-  if (!token)
-    return (
-      <Login
-        error={error}
-        onLogin={(value) => {
-          sessionStorage.setItem("erp-access-token", value);
-          setToken(value);
-        }}
-      />
-    );
   const data = loaded?.dashboard;
   const nav = [
     { id: "overview" as const, label: "经营概览", icon: LayoutDashboard },
@@ -177,10 +148,6 @@ export function App() {
             <i /> 本地数据模式
           </span>
         </div>
-        <button className="logout" onClick={logout}>
-          <LogOut size={17} />
-          退出当前访问
-        </button>
       </aside>
       <div className="main-shell">
         <header className="topbar">
@@ -201,22 +168,26 @@ export function App() {
             <div>
               <div className="eyebrow">PLATFORM ANALYTICS</div>
               <h1>
-                {page === "analytics" ? "AI 数据分析" : page === "overview"
-                  ? "经营概览"
-                  : page === "orders"
-                    ? "订单明细"
-                    : page === "feishu"
-                      ? "飞书销售日报"
-                    : "业务口径与假设"}
+                {page === "analytics"
+                  ? "AI 数据分析"
+                  : page === "overview"
+                    ? "经营概览"
+                    : page === "orders"
+                      ? "订单明细"
+                      : page === "feishu"
+                        ? "飞书销售日报"
+                        : "业务口径与假设"}
               </h1>
               <p>
-                {page === "analytics" ? "从问题到数据、图表与可核验的结论。" : page === "overview"
-                  ? "从平台订单出发，看清经营表现与成交结构。"
-                  : page === "orders"
-                    ? "沿着每一个数字，找到原始业务依据。"
-                    : page === "feishu"
-                      ? "让每天的销售情况，准时送达飞书群。"
-                    : "先用清晰的默认规则推进，业务确认后再统一调整。"}
+                {page === "analytics"
+                  ? "从问题到数据、图表与可核验的结论。"
+                  : page === "overview"
+                    ? "从平台订单出发，看清经营表现与成交结构。"
+                    : page === "orders"
+                      ? "沿着每一个数字，找到原始业务依据。"
+                      : page === "feishu"
+                        ? "让每天的销售情况，准时送达飞书群。"
+                        : "先用清晰的默认规则推进，业务确认后再统一调整。"}
               </p>
             </div>
             <button
@@ -235,7 +206,7 @@ export function App() {
               <span>正在加载指标、口径和数据依据…</span>
             </div>
           )}
-          {error && token && (
+          {error && (
             <div className="error-panel" role="alert">
               <Info size={22} />
               <h2>暂时无法展示分析结果</h2>
@@ -317,21 +288,13 @@ export function App() {
               {page === "orders" && (
                 <Orders
                   key={`${view}-${attempt}`}
-                  token={token}
                   view={view}
                   currency={data.operating.policy.currency}
-                  onUnauthorized={logout}
                 />
               )}
-              {page === "rules" && (
-                <Rules data={data} token={token} onUnauthorized={logout} />
-              )}
-              {page === "feishu" && (
-                <FeishuDaily key={attempt} token={token} onUnauthorized={logout} />
-              )}
-              {page === "analytics" && (
-                <Analytics key={attempt} token={token} onUnauthorized={logout} />
-              )}
+              {page === "rules" && <Rules data={data} />}
+              {page === "feishu" && <FeishuDaily key={attempt} />}
+              {page === "analytics" && <Analytics key={attempt} />}
               <footer>
                 <span>
                   <ShieldCheck size={13} /> 来源：ERP 销售订单 ·
@@ -356,77 +319,6 @@ function previousDay(iso: string) {
   const date = new Date(`${iso}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() - 1);
   return date.toISOString().slice(0, 10);
-}
-
-function Login({
-  error,
-  onLogin,
-}: {
-  error: string;
-  onLogin: (token: string) => void;
-}) {
-  const [value, setValue] = useState("");
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (value.trim()) onLogin(value.trim());
-  }
-  return (
-    <div className="login-screen">
-      <div className="login-story">
-        <Brand />
-        <div>
-          <div className="eyebrow">KNOW YOUR BUSINESS</div>
-          <h1>
-            把经营数据，
-            <br />
-            变成清晰的判断。
-          </h1>
-          <p>看趋势、看结构，也看每项结论背后的订单依据。</p>
-          <div className="story-bars" aria-hidden="true">
-            {[35, 50, 40, 68, 57, 80, 72, 96].map((height, index) => (
-              <i key={index} style={{ height: `${height}%` }} />
-            ))}
-          </div>
-        </div>
-        <small>ERP AI Assistant · 平台运营工作台</small>
-      </div>
-      <div className="login-content">
-        <form onSubmit={submit}>
-          <span className="login-icon">
-            <ShieldCheck size={26} />
-          </span>
-          <h2>进入经营工作台</h2>
-          <p>使用本地访问令牌，查看已授权的数据快照。</p>
-          <label htmlFor="access-token">访问令牌</label>
-          <input
-            id="access-token"
-            type="password"
-            autoComplete="off"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            placeholder="请输入访问令牌"
-            required
-            autoFocus
-          />
-          {error && (
-            <p className="login-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="button" type="submit">
-            进入工作台 <ArrowUpRight size={17} />
-          </button>
-          <details>
-            <summary>在哪里获取访问令牌？</summary>
-            <p>
-              启动本地服务后，打开项目中的 <code>.local/api-token.txt</code>
-              ，复制其中的内容。令牌只保存在当前浏览器标签页，退出时清除。
-            </p>
-          </details>
-        </form>
-      </div>
-    </div>
-  );
 }
 
 function Overview({
@@ -773,17 +665,7 @@ function Ranking({
   );
 }
 
-function Orders({
-  token,
-  view,
-  currency,
-  onUnauthorized,
-}: {
-  token: string;
-  view: View;
-  currency: string;
-  onUnauthorized: () => void;
-}) {
+function Orders({ view, currency }: { view: View; currency: string }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState<OrdersPage | null>(null);
   const [error, setError] = useState("");
@@ -795,7 +677,6 @@ function Orders({
     setError("");
     api<OrdersPage>(
       `/orders?page=${page}&page_size=10&view=${view}`,
-      token,
       controller.signal,
     )
       .then((value) => {
@@ -803,11 +684,10 @@ function Orders({
       })
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
-        if (cause instanceof ApiError && cause.status === 401) onUnauthorized();
-        else setError(cause instanceof Error ? cause.message : "订单读取失败");
+        setError(cause instanceof Error ? cause.message : "订单读取失败");
       });
     return () => controller.abort();
-  }, [token, page, view, attempt]);
+  }, [page, view, attempt]);
   return (
     <section className="panel orders-panel">
       <div className="panel-heading">
@@ -995,15 +875,7 @@ function OrderDialog({
   );
 }
 
-function Rules({
-  data,
-  token,
-  onUnauthorized,
-}: {
-  data: Dashboard;
-  token: string;
-  onUnauthorized: () => void;
-}) {
+function Rules({ data }: { data: Dashboard }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const policy = data.operating.policy;
@@ -1012,13 +884,8 @@ function Rules({
     setError("");
     try {
       const response = await fetch("/api/v1/business/assumptions", {
-        headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
       });
-      if (response.status === 401) {
-        onUnauthorized();
-        return;
-      }
       if (!response.ok) throw new Error("暂时无法下载业务台账，请重试。");
       const url = URL.createObjectURL(await response.blob());
       const anchor = document.createElement("a");

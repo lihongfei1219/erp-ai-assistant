@@ -1,10 +1,8 @@
-import secrets
 from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 
 from app.analysis.api import register_analysis_routes
@@ -24,6 +22,7 @@ from app.schemas.sales import (
     StrictModel,
     Summary,
 )
+from app.semantic.context import signing_key
 
 
 class DashboardResponse(StrictModel):
@@ -79,7 +78,9 @@ class OperatingResponse(StrictModel):
 
 
 def create_app(
-    settings: ApiSettings | None = None, *, report: SalesReport | None = None,
+    settings: ApiSettings | None = None,
+    *,
+    report: SalesReport | None = None,
     analysis_planner=None,
 ) -> FastAPI:
     settings = settings or ApiSettings.from_env()
@@ -87,8 +88,8 @@ def create_app(
         title="ERP AI Assistant · 销售订单试点",
         version="0.1.0",
         description=(
-            "读取独立分析进程生成的本地快照。所有业务接口需 Bearer 令牌。"
-            "令牌绑定当前配置的快照及企业范围，日期范围由生成快照时确定。"
+            "读取独立分析进程生成的本地快照。本机使用无需访问令牌。"
+            "企业及日期范围由当前配置的快照确定。"
             "订单金额不是支付成交额。"
         ),
     )
@@ -99,18 +100,6 @@ def create_app(
         except Exception:
             # Fail closed without leaking source paths, order values or validation input.
             configured_report = None
-
-    security = HTTPBearer(auto_error=False)
-
-    def authorize(
-        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],
-    ):
-        if len(settings.token) < 32:
-            raise HTTPException(503, "未配置足够强度的开发访问令牌")
-        if credentials is None or not secrets.compare_digest(
-            credentials.credentials.encode("utf-8"), settings.token.encode("utf-8")
-        ):
-            raise HTTPException(401, "需要有效的访问令牌", headers={"WWW-Authenticate": "Bearer"})
 
     def get_report() -> SalesReport:
         if configured_report is None:
@@ -128,9 +117,7 @@ def create_app(
         if set(request.query_params) - allowed:
             raise HTTPException(422, "包含不支持的筛选参数；日期和企业范围由当前快照确定")
 
-    router = APIRouter(
-        prefix="/api/v1", dependencies=[Depends(authorize), Depends(reject_unknown_filters)]
-    )
+    router = APIRouter(prefix="/api/v1", dependencies=[Depends(reject_unknown_filters)])
 
     @application.middleware("http")
     async def private_responses(request, call_next):
@@ -232,13 +219,14 @@ def create_app(
             raise HTTPException(404, "订单不在当前快照范围内")
         return EvidenceResponse(metadata=result.metadata, item=item)
 
-    register_analysis_routes(router, get_report, analysis_planner)
+    register_analysis_routes(router, get_report, analysis_planner, context_secret=signing_key())
     register_feishu_routes(router, get_report)
     application.include_router(router)
 
     @application.get("/assets/analytics-plotly.js", include_in_schema=False)
     def plotly_library():
         import plotly
+
         path = Path(plotly.__file__).parent / "package_data" / "plotly.min.js"
         return FileResponse(path, media_type="application/javascript")
 
