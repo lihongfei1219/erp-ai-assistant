@@ -6,8 +6,7 @@ from app.core.settings import ApiSettings
 from app.main import create_app
 from app.notifications import feishu
 
-TOKEN = "feishu-test-token-0123456789abcdef"
-HEADERS = {"Authorization": f"Bearer {TOKEN}"}
+HEADERS = {}
 
 
 def daily_client(extract, window, scope, source_as_of):
@@ -19,7 +18,7 @@ def daily_client(extract, window, scope, source_as_of):
         rules=load_business_rules(),
         synthetic=True,
     )
-    return TestClient(create_app(ApiSettings(token=TOKEN), report=report))
+    return TestClient(create_app(ApiSettings(), report=report))
 
 
 def test_preview_uses_only_selected_day_and_effective_orders(extract, window, scope, source_as_of):
@@ -38,9 +37,9 @@ def test_preview_uses_only_selected_day_and_effective_orders(extract, window, sc
     assert digest["products"][0]["order_amount"] == "200.0000"
 
 
-def test_preview_auth_scope_and_unavailable_dates(extract, window, scope, source_as_of):
+def test_preview_direct_access_scope_and_unavailable_dates(extract, window, scope, source_as_of):
     client = daily_client(extract, window, scope, source_as_of)
-    assert client.get("/api/v1/feishu/daily?day=2026-09-02").status_code == 401
+    assert client.get("/api/v1/feishu/daily?day=2026-09-02").status_code == 200
     assert (
         client.get(
             "/api/v1/feishu/daily?day=2026-09-02&buyer_code=another", headers=HEADERS
@@ -48,7 +47,6 @@ def test_preview_auth_scope_and_unavailable_dates(extract, window, scope, source
         == 422
     )
     assert client.get("/api/v1/feishu/daily?day=2026-09-19", headers=HEADERS).status_code == 409
-    assert client.post("/api/v1/feishu/send", json={"day": "2026-09-02"}).status_code == 401
 
 
 def test_send_uses_configured_group_and_never_returns_secrets(

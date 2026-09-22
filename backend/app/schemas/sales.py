@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.operations import OperationsSnapshot
+
 METRIC_VERSION = "qy.sales_orders.v1"
 REPORT_SCHEMA_VERSION = "1"
 
@@ -182,3 +184,4 @@ class SalesReport(StrictModel):
     stats: RunStats = Field(default_factory=RunStats)
     evidence: list[OrderEvidence]
     operating: OperatingAnalysis | None = None
+    operations: OperationsSnapshot | None = None

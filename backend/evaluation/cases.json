@@ -1,0 +1,1621 @@
+{
+  "version": "1",
+  "today": "2026-09-22",
+  "cases": [
+    {
+      "id": "screenshot_recent_sales",
+      "source": "user_screenshot",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "这几天卖了多少钱",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": null
+              }
+            ]
+          },
+          "expected": {
+            "status": "needs_input",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": null
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_return_products",
+      "source": "user_screenshot",
+      "tags": [
+        "returns"
+      ],
+      "turns": [
+        {
+          "question": "那些退货了",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "list",
+                "metric": null,
+                "time": null,
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "needs_input",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "list",
+                "time": null,
+                "target": "product"
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          },
+          "alternatives": [
+            {
+              "status": "needs_input",
+              "intents": [
+                {
+                  "domain": "returns",
+                  "operation": "list",
+                  "time": null
+                }
+              ],
+              "clarification_field": "target",
+              "plan": []
+            }
+          ]
+        },
+        {
+          "question": "我想看退货的商品，九月十五号",
+          "replay": {
+            "mode": "answer",
+            "intents": [
+              {
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "list",
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "returns",
+                "kind": "list",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ],
+            "ignore_plan_metric": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_best_product",
+      "source": "user_screenshot",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "哪个药品卖的最好",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": null,
+                "time": null,
+                "target": "product",
+                "generic_product_scope": true,
+                "limit": 1
+              }
+            ]
+          },
+          "expected": {
+            "status": "needs_input",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "time": null,
+                "target": "product",
+                "generic_product_scope": true,
+                "limit": 1
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_return_rate",
+      "source": "user_screenshot",
+      "tags": [
+        "returns"
+      ],
+      "turns": [
+        {
+          "question": "那些退货率高",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "ranking",
+                "metric": "return_rate",
+                "time": null,
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "capability_gap",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "ranking",
+                "metric": "return_rate",
+                "time": null,
+                "target": "product"
+              }
+            ],
+            "clarification_field": "metric",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_high_stock",
+      "source": "user_screenshot",
+      "tags": [
+        "inventory"
+      ],
+      "turns": [
+        {
+          "question": "库存多的是那些药品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": null,
+                "target": "product",
+                "generic_product_scope": true
+              }
+            ]
+          },
+          "expected": {
+            "status": "needs_input",
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": null,
+                "target": "product",
+                "generic_product_scope": true
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_today_sales",
+      "source": "user_screenshot",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "今天卖了多少",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "今天"
+              }
+            ]
+          },
+          "expected": {
+            "status": "data_gap",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "今天"
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_today_returns",
+      "source": "user_screenshot",
+      "tags": [
+        "returns"
+      ],
+      "turns": [
+        {
+          "question": "今天退了多少",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "今天"
+              }
+            ]
+          },
+          "expected": {
+            "status": "data_gap",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "今天"
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_today_shipping",
+      "source": "user_screenshot",
+      "tags": [
+        "shipping"
+      ],
+      "turns": [
+        {
+          "question": "今天出库了那些药品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "shipping",
+                "operation": "list",
+                "metric": null,
+                "time": "今天",
+                "target": "product",
+                "generic_product_scope": true
+              }
+            ]
+          },
+          "expected": {
+            "status": "data_gap",
+            "intents": [
+              {
+                "domain": "shipping",
+                "operation": "list",
+                "time": "今天",
+                "target": "product",
+                "generic_product_scope": true
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_sales_ranking",
+      "source": "user_screenshot",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号那些药品卖的多",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "generic_product_scope": true
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "generic_product_scope": true
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_returns_exist",
+      "source": "user_screenshot",
+      "tags": [
+        "returns"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号有退货吗",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "existence",
+                "metric": null,
+                "time": "九月十五号"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "existence",
+                "time": "九月十五号"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "returns",
+                "kind": "existence",
+                "metric": "orders",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ],
+            "ignore_plan_metric": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_shipping_quantity",
+      "source": "user_screenshot",
+      "tags": [
+        "shipping"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号出库了多少商品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "shipping",
+                "operation": "summary",
+                "metric": "quantity",
+                "time": "九月十五号"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "shipping",
+                "operation": "summary",
+                "metric": "quantity",
+                "time": "九月十五号"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "shipping",
+                "kind": "summary",
+                "metric": "quantity",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_chinese_date",
+      "source": "user_screenshot",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "九月五号那天什么商品卖的多",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月五号",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月五号",
+                "target": "product"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "amount",
+                "start_date": "2026-09-05",
+                "end_date_exclusive": "2026-09-06"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_region",
+      "source": "user_screenshot",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "九月十号哪些地区成交频繁",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": null,
+                "time": "九月十号",
+                "target": "region"
+              }
+            ]
+          },
+          "expected": {
+            "status": "capability_gap",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "time": "九月十号",
+                "target": "region"
+              }
+            ],
+            "clarification_field": "target",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "explicit_sales_quantity",
+      "source": "synthetic",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号按销售数量排商品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "quantity",
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "capability_gap",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "quantity",
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ],
+            "clarification_field": "metric",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "category_filter",
+      "source": "synthetic",
+      "tags": [
+        "sales"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号只看药品，排除器械，按金额排行",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "filters": [
+                  {
+                    "field": "category",
+                    "operator": "include",
+                    "value": "药品"
+                  },
+                  {
+                    "field": "category",
+                    "operator": "exclude",
+                    "value": "器械"
+                  }
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "status": "capability_gap",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "filters": [
+                  {
+                    "field": "category",
+                    "operator": "include",
+                    "value": "药品"
+                  },
+                  {
+                    "field": "category",
+                    "operator": "exclude",
+                    "value": "器械"
+                  }
+                ]
+              }
+            ],
+            "clarification_field": "filters",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "historical_stock",
+      "source": "synthetic",
+      "tags": [
+        "inventory"
+      ],
+      "turns": [
+        {
+          "question": "九月十六号哪些商品库存多",
+          "replay": {
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "九月十六号",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "九月十六号",
+                "target": "product"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "inventory",
+                "kind": "product_ranking",
+                "metric": "stock",
+                "start_date": "2026-09-16",
+                "end_date_exclusive": "2026-09-17"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "current_stock",
+      "source": "synthetic",
+      "tags": [
+        "inventory"
+      ],
+      "turns": [
+        {
+          "question": "现在库存最多的是哪些商品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "现在",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "data_gap",
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "现在",
+                "target": "product"
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "returns_date_completion",
+      "source": "synthetic",
+      "tags": [
+        "returns",
+        "followup",
+        "date"
+      ],
+      "turns": [
+        {
+          "question": "帮我看看退货金额",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": null
+              }
+            ]
+          },
+          "expected": {
+            "status": "needs_input",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": null
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        },
+        {
+          "question": "九月十五号",
+          "replay": {
+            "mode": "answer",
+            "intents": [
+              {
+                "time": "九月十五号"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "returns",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        },
+        {
+          "question": "改成看趋势",
+          "replay": {
+            "mode": "followup",
+            "intents": [
+              {
+                "operation": "trend"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "trend",
+                "metric": "amount",
+                "time": "九月十五号"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "returns",
+                "kind": "trend",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sales_metric_followup",
+      "source": "synthetic",
+      "tags": [
+        "sales",
+        "followup",
+        "constraints"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号商品销售金额前五名",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "limit": 5
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "limit": 5
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16",
+                "top_n": 5
+              }
+            ]
+          }
+        },
+        {
+          "question": "换成按订单数排",
+          "replay": {
+            "mode": "followup",
+            "intents": [
+              {
+                "metric": "orders"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "orders",
+                "time": "九月十五号",
+                "target": "product",
+                "limit": 5
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "orders",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16",
+                "top_n": 5
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "multi_domain_edit_append",
+      "source": "synthetic",
+      "tags": [
+        "combination",
+        "followup",
+        "constraints"
+      ],
+      "turns": [
+        {
+          "question": "分别看9月15号的销售金额、退货金额和销售出库金额",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "shipping",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "shipping",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "returns",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "shipping",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        },
+        {
+          "question": "只把出库那项改成按商品数量排行，销售和退货保持不变",
+          "replay": {
+            "mode": "followup",
+            "edits": [
+              {
+                "intent_id": "@shipping",
+                "operation": "set",
+                "field": "operation",
+                "value": "ranking"
+              },
+              {
+                "intent_id": "@shipping",
+                "operation": "set",
+                "field": "metric",
+                "value": "quantity"
+              },
+              {
+                "intent_id": "@shipping",
+                "operation": "set",
+                "field": "target",
+                "value": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "shipping",
+                "operation": "ranking",
+                "metric": "quantity",
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "returns",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "shipping",
+                "kind": "product_ranking",
+                "metric": "quantity",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        },
+        {
+          "question": "保留这三项，再加一份9月16号的商品库存数量排行",
+          "replay": {
+            "mode": "followup",
+            "add_intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "9月16号",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              },
+              {
+                "domain": "shipping",
+                "operation": "ranking",
+                "metric": "quantity",
+                "time": "九月十五号",
+                "target": "product"
+              },
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "9月16号",
+                "target": "product"
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "returns",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "shipping",
+                "kind": "product_ranking",
+                "metric": "quantity",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              },
+              {
+                "domain": "inventory",
+                "kind": "product_ranking",
+                "metric": "stock",
+                "start_date": "2026-09-16",
+                "end_date_exclusive": "2026-09-17"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "inventory_does_not_reuse_history",
+      "source": "synthetic",
+      "tags": [
+        "inventory",
+        "followup",
+        "date"
+      ],
+      "turns": [
+        {
+          "question": "九月十六号库存最多的前十个商品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "九月十六号",
+                "target": "product",
+                "limit": 10
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "九月十六号",
+                "target": "product",
+                "limit": 10
+              }
+            ],
+            "clarification_field": null,
+            "plan": [
+              {
+                "domain": "inventory",
+                "kind": "product_ranking",
+                "metric": "stock",
+                "start_date": "2026-09-16",
+                "end_date_exclusive": "2026-09-17"
+              }
+            ]
+          }
+        },
+        {
+          "question": "那现在的库存呢",
+          "replay": {
+            "mode": "followup",
+            "intents": [
+              {
+                "time": "现在"
+              }
+            ]
+          },
+          "expected": {
+            "status": "data_gap",
+            "intents": [
+              {
+                "domain": "inventory",
+                "operation": "ranking",
+                "metric": "stock",
+                "time": "现在",
+                "target": "product"
+              }
+            ],
+            "clarification_field": "time",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "return_list_paraphrase",
+      "source": "synthetic",
+      "tags": [
+        "returns",
+        "output_goal"
+      ],
+      "turns": [
+        {
+          "question": "帮我列一下九月十五号退回来的商品",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "list",
+                "metric": null,
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "list",
+                "time": "九月十五号",
+                "target": "product"
+              }
+            ],
+            "plan": [
+              {
+                "domain": "returns",
+                "kind": "list",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ],
+            "ignore_plan_metric": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "return_summary_control",
+      "source": "synthetic",
+      "tags": [
+        "returns",
+        "output_goal"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号总共退货多少金额",
+          "replay": {
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "returns",
+                "operation": "summary",
+                "metric": "amount",
+                "time": "九月十五号"
+              }
+            ],
+            "plan": [
+              {
+                "domain": "returns",
+                "kind": "summary",
+                "metric": "amount",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "category_exclusion_first",
+      "source": "synthetic",
+      "tags": [
+        "sales",
+        "constraints",
+        "exclusion"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号不要器械，只统计药品销售，按金额排名",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "filters": [
+                  {
+                    "field": "category",
+                    "operator": "include",
+                    "value": "药品"
+                  },
+                  {
+                    "field": "category",
+                    "operator": "exclude",
+                    "value": "器械"
+                  }
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "status": "capability_gap",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "filters": [
+                  {
+                    "field": "category",
+                    "operator": "include",
+                    "value": "药品"
+                  },
+                  {
+                    "field": "category",
+                    "operator": "exclude",
+                    "value": "器械"
+                  }
+                ]
+              }
+            ],
+            "clarification_field": "filters",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "category_exclusion_colloquial",
+      "source": "synthetic",
+      "tags": [
+        "sales",
+        "constraints",
+        "exclusion"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号销售排行，只看药品，器械不算，按金额",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "filters": [
+                  {
+                    "field": "category",
+                    "operator": "include",
+                    "value": "药品"
+                  },
+                  {
+                    "field": "category",
+                    "operator": "exclude",
+                    "value": "器械"
+                  }
+                ]
+              }
+            ]
+          },
+          "expected": {
+            "status": "capability_gap",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "metric": "amount",
+                "time": "九月十五号",
+                "target": "product",
+                "filters": [
+                  {
+                    "field": "category",
+                    "operator": "include",
+                    "value": "药品"
+                  },
+                  {
+                    "field": "category",
+                    "operator": "exclude",
+                    "value": "器械"
+                  }
+                ]
+              }
+            ],
+            "clarification_field": "filters",
+            "plan": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "screenshot_low_sales",
+      "source": "user_screenshot",
+      "tags": [
+        "sales",
+        "ranking"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号什么药品卖的少",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "target": "product",
+                "metric": "amount",
+                "time": "2026-09-15",
+                "order": "ascending",
+                "generic_product_scope": true
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "target": "product",
+                "metric": "amount",
+                "time": "2026-09-15",
+                "order": "ascending"
+              }
+            ],
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "amount",
+                "order": "ascending",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16",
+                "top_n": 10
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "sales_reverse_ranking_followup",
+      "source": "synthetic",
+      "tags": [
+        "sales",
+        "followup"
+      ],
+      "turns": [
+        {
+          "question": "九月十五号按订单数看商品前十，从多到少",
+          "replay": {
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "target": "product",
+                "metric": "orders",
+                "time": "2026-09-15",
+                "order": "descending",
+                "limit": 10
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "target": "product",
+                "metric": "orders",
+                "time": "2026-09-15",
+                "order": "descending"
+              }
+            ],
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "orders",
+                "order": "descending",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16",
+                "top_n": 10
+              }
+            ]
+          }
+        },
+        {
+          "question": "那卖得少的呢",
+          "replay": {
+            "mode": "followup",
+            "intents": [
+              {
+                "order": "ascending"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "target": "product",
+                "metric": "orders",
+                "time": "2026-09-15",
+                "order": "ascending"
+              }
+            ],
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "orders",
+                "order": "ascending",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16",
+                "top_n": 10
+              }
+            ]
+          }
+        },
+        {
+          "question": "再换回卖得多的",
+          "replay": {
+            "mode": "followup",
+            "intents": [
+              {
+                "order": "descending"
+              }
+            ]
+          },
+          "expected": {
+            "status": "result",
+            "intents": [
+              {
+                "domain": "sales",
+                "operation": "ranking",
+                "target": "product",
+                "metric": "orders",
+                "time": "2026-09-15",
+                "order": "descending"
+              }
+            ],
+            "plan": [
+              {
+                "domain": "sales",
+                "kind": "product_ranking",
+                "metric": "orders",
+                "order": "descending",
+                "start_date": "2026-09-15",
+                "end_date_exclusive": "2026-09-16",
+                "top_n": 10
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

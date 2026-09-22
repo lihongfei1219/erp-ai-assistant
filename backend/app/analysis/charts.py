@@ -9,12 +9,20 @@ from app.schemas.analytics import AnalysisResult, AnalysisStep
 
 
 def build_chart(result: AnalysisResult, step: AnalysisStep, currency: str) -> dict | None:
-    if not result.rows or step.kind == "summary":
+    if (
+        not result.rows
+        or step.kind in {"summary", "list", "existence"}
+        or step.metric in {"quantity", "stock"}
+    ):
         return None
     y_key = (
         "delta"
         if step.kind == "comparison"
-        else ("order_count" if step.metric == "orders" else "amount")
+        else (
+            ("order_count" if step.domain == "sales" else "document_count")
+            if step.metric == "orders"
+            else "amount"
+        )
     )
     labels = [
         html.escape(str(row.get("day") or row.get("name") or row.get("code")))
@@ -39,7 +47,9 @@ def build_chart(result: AnalysisResult, step: AnalysisStep, currency: str) -> di
         template="plotly_white",
         height=330,
         margin=dict(l=65, r=20, t=20, b=80),
-        yaxis_title="订单数" if step.metric == "orders" else currency,
+        yaxis_title=("订单数" if step.domain == "sales" else "单据数")
+        if step.metric == "orders"
+        else currency,
         xaxis=dict(
             type="category", automargin=True, tickmode="array", tickvals=categories, ticktext=labels
         ),

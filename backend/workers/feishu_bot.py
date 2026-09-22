@@ -46,7 +46,9 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--report-path",
         type=Path,
-        default=DEFAULT_STATE.parent / "reports/platform-operating-20260916.json",
+        default=(DEFAULT_STATE.parent / "reports/platform-four-domain-20260922.json")
+        if (DEFAULT_STATE.parent / "reports/platform-four-domain-20260922.json").is_file()
+        else DEFAULT_STATE.parent / "reports/platform-operating-20260916.json",
     )
     args = parser.parse_args(argv)
     stop = threading.Event()
@@ -74,11 +76,11 @@ def main(argv=None) -> int:
             return 0
         store = None
         if args.sales:
-            from app.ai.analytics_agent import AnalyticsPlanner
             from app.ai.model_client import ModelSettings, ModelUnavailable, load_model_settings
             from app.core.reports import load_report
             from app.integrations.feishu_jobs import SqlJobStore
             from app.integrations.feishu_sales import SalesBot
+            from app.semantic.provider import SemanticPlanner
 
             config.require_authorized_groups()
             snapshot = load_report(args.report_path)
@@ -86,13 +88,18 @@ def main(argv=None) -> int:
                 raise AppConfigError("销售模式需要包含有效销售规则的全平台快照")
             store = SqlJobStore(config.app_id, config.tenant_key)
             store.check()
-            interpreter = AnalyticsPlanner(ModelSettings(enabled=False))
+            interpreter = SemanticPlanner(ModelSettings(enabled=False))
             try:
                 settings = load_model_settings()
-                interpreter = AnalyticsPlanner(settings)
+                interpreter = SemanticPlanner(settings)
                 if settings.enabled:
+                    from app.analysis.operations import DOMAIN_LABELS, executable_domains
+
                     print(
-                        "六类自然语言分析已启用；模型仅接收问题、日期与上次结构化计划。", flush=True
+                        "四域语义理解已启用；当前快照可执行："
+                        + "、".join(DOMAIN_LABELS[d] for d in executable_domains(snapshot))
+                        + "。",
+                        flush=True,
                     )
                 else:
                     print("模型未配置，使用固定指令查询。", flush=True)

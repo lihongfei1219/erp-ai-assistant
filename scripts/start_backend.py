@@ -1,8 +1,7 @@
-"""Start the local API with the saved report and development token."""
+"""Start the loopback API with the saved report; no access token is required."""
 
 import argparse
 import os
-import secrets
 import sys
 from pathlib import Path
 
@@ -18,7 +17,9 @@ def main() -> None:
 
     report_path = args.report_path
     if report_path is None:
-        report_path = project_root / ".local/reports/platform-operating-20260916.json"
+        report_path = project_root / ".local/reports/platform-four-domain-20260922.json"
+        if not report_path.is_file():
+            report_path = project_root / ".local/reports/platform-operating-20260916.json"
         if not report_path.is_file():
             report_path = project_root / ".local/reports/platform-sales-20260916.json"
     report_path = report_path.resolve()
@@ -32,24 +33,10 @@ def main() -> None:
             "Use the project .venv Python with backend/requirements.lock installed"
         )
 
-    token_path = project_root / ".local/api-token.txt"
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with token_path.open("x", encoding="utf-8") as token_file:
-            token_file.write(secrets.token_urlsafe(32))
-    except FileExistsError:
-        pass
-    token = token_path.read_text(encoding="utf-8-sig").strip()
-    if len(token) < 32:
-        parser.error(
-            f"The development token in {token_path} must have at least 32 characters"
-        )
-
-    os.environ["ERP_API_TOKEN"] = token
     os.environ["ERP_REPORT_PATH"] = str(report_path)
     sys.path.insert(0, str(project_root / "backend"))
     print(f"API documentation: http://127.0.0.1:{args.port}/docs", flush=True)
-    print(f"Bearer token file (local only): {token_path}", flush=True)
+    print(f"Local workspace: http://127.0.0.1:{args.port}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     uvicorn.run("app.main:app", host="127.0.0.1", port=args.port)
 

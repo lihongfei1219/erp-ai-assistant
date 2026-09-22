@@ -62,8 +62,13 @@ def available_dates(report: SalesReport):
 
 
 def validate_plan(report: SalesReport, plan: AnalysisPlan):
-    start, end = available_dates(report)
+    from app.analysis.operations import validate_operation_step
+
     for step in plan.steps:
+        if step.domain != "sales":
+            validate_operation_step(report, step)
+            continue
+        start, end = available_dates(report)
         intervals = [(step.start_date, step.end_date_exclusive)]
         if step.kind == "comparison":
             intervals.append((step.comparison_start_date, step.comparison_end_date_exclusive))
@@ -286,7 +291,8 @@ def _execute(orders, lines, step):
     elif step.kind in {"buyer_ranking", "product_ranking"}:
         rows = _groups(selected if step.kind == "buyer_ranking" else selected_lines)
         key = "amount" if step.metric == "amount" else "order_count"
-        rows.sort(key=lambda row: (-Decimal(row[key]), row["code"]))
+        direction = 1 if step.order == "ascending" else -1
+        rows.sort(key=lambda row: (direction * Decimal(row[key]), row["code"]))
         result = result.model_copy(
             update={
                 "columns": {
@@ -297,6 +303,13 @@ def _execute(orders, lines, step):
                 },
                 "rows": rows[: step.top_n],
                 "totals": dict(result.totals, total_groups=len(rows)),
+                "notes": result.notes
+                + [
+                    f"按{'订单金额' if step.metric == 'amount' else '订单数'}"
+                    f"{'从低到高' if step.order == 'ascending' else '从高到低'}排列，"
+                    f"取前 {step.top_n} 项；同值按编码排序。",
+                    "仅对所选期间有有效销售记录的对象排行，不包含无销售记录的对象。",
+                ],
             }
         )
     else:
@@ -342,13 +355,26 @@ def _execute(orders, lines, step):
 
 
 def execute_analysis(report: SalesReport, plan: AnalysisPlan) -> AnalysisResponse:
+    from app.analysis.operations import execute_operation, validate_operations
+
+    # Revalidate even plans passed by in-process callers using model_copy.
+    plan = AnalysisPlan.model_validate(plan.model_dump())
     validate_plan(report, plan)
-    _validate_evidence(report)
-    orders, lines = _frames(report)
+    if any(step.domain == "sales" for step in plan.steps):
+        _validate_evidence(report)
+        orders, lines = _frames(report)
+    if any(step.domain != "sales" for step in plan.steps):
+        validate_operations(report)
+    if report.operating is None:
+        raise QueryUnavailable("快照缺少业务时区和货币口径，请重新生成。")
     policy = report.operating.policy
     results = []
     for step in plan.steps:
-        result = _execute(orders, lines, step)
+        result = (
+            _execute(orders, lines, step)
+            if step.domain == "sales"
+            else execute_operation(report, step)
+        )
         results.append(
             result.model_copy(update={"chart": build_chart(result, step, policy.currency)})
         )

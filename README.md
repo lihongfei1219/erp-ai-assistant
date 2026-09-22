@@ -2,7 +2,7 @@
 
 面向B2B平台内部运营的只读数据分析助手。Python读取ERP销售快照，Pandas/Decimal计算事实，Pydantic AI理解自然语言；网页和飞书展示同一套分析结果，不执行ERP业务操作。
 
-**当前已实现：**经营看板、订单证据、六类自然语言分析、组合问题与追问、飞书应用机器人及统一卡片展示。数据完整范围为2026-09-01至09-15，来自历史备份；自动数据更新、正式SSO和生产进程守护尚未接入。
+**当前已实现：**经营看板、订单证据、销售／退货／销售出库／库存自然语言分析、组合问题与追问、飞书应用机器人及统一卡片展示。销售、退货和销售出库完整日期为2026-09-01至09-15，库存为09-16 14:33:41备份时点；自动数据更新、正式SSO和生产进程守护尚未接入。
 
 项目进度、待验收事项和下一步统一看 **[项目进度](docs/project-status.md)**。
 
@@ -14,7 +14,7 @@
 .venv/Scripts/python.exe scripts/start_backend.py --port 8001
 ```
 
-打开`http://127.0.0.1:8001`，使用`.local/api-token.txt`中的本地令牌。当前新版服务已在8001运行，启动新进程前先确认端口；脚本默认端口为8000。服务仅监听本机。默认加载`.local/reports/platform-operating-20260916.json`，可用`--report-path`指定另一份已对账快照。
+打开`http://127.0.0.1:8001`即可进入工作台，无需本地令牌或登录；启动脚本不再生成访问令牌。启动前先确认端口；脚本默认端口为8000。服务仅监听本机。优先加载`.local/reports/platform-four-domain-20260922.json`，不存在则回退原销售快照。可用`--report-path`指定另一份已对账快照。
 
 首次安装或修改依赖、前端后：
 
@@ -34,7 +34,7 @@ FastAPI同源提供`frontend/dist`；分别开发时在`frontend/`执行`npm run
 .venv/Scripts/python.exe scripts/start_feishu_bot.py --sales
 ```
 
-同一状态目录只运行一个机器人进程。当前本机已运行该进程，不要重复启动。首次部署步骤见[应用接入](docs/feishu-app-setup.md)和[问数说明](docs/feishu-analytics.md)。群内示例：`@机器人 分析2026年9月1日至5号的销售数据，哪些药品卖得好`。
+同一状态目录只运行一个机器人进程，启动前检查现有进程。首次部署步骤见[应用接入](docs/feishu-app-setup.md)和[问数说明](docs/feishu-analytics.md)。群内示例：`@机器人 九月十五号哪个药品卖得最好`。
 
 ## 文档导航
 
@@ -64,3 +64,5 @@ database_backups/    数据库备份、安装介质及本机说明（不提交�
 `.local`包含凭据和去重状态，不能整体删除。`scripts/Clean-Workspace.ps1`默认只预览清单，显式加`-Apply`才清理已识别生成物；`-IncludeDownloadCaches`额外清理本项目的uv/npm下载缓存。它保留已安装依赖、运行构建和业务数据。详见[维护说明](docs/validation.md)。
 
 从`backend/`运行`../.venv/Scripts/python.exe -m pytest -q -p no:cacheprovider`及`../.venv/Scripts/ruff.exe check . --no-cache`。外部模型、源库和助手库测试使用独立开关，默认跳过；完整说明见验证记录。
+
+自然语言标注评测从项目根目录运行`.venv/Scripts/python.exe scripts/evaluate_dialogue.py`，默认离线回放；加`--cloud`才调用已配置的大模型。支持`--case`选择场景和`--output`保存报告，详见[评测说明](docs/analysis-assistant.md#自然语言标注评测)。

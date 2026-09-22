@@ -71,9 +71,23 @@ class AnalyticsStore:
                     row[key] == job[key]
                     for key in ("app_id", "tenant_key", "chat_id", "user_open_id")
                 )
-                and row["payload"]["kind"] in {"analysis", "clear_context"}
+                and row["payload"]["kind"] in {"analysis", "semantic_notice", "clear_context"}
             ):
-                return row["payload"] if row["payload"]["kind"] == "analysis" else None
+                return row["payload"] if row["payload"]["kind"] != "clear_context" else None
+
+    def latest_numbered_choice_context(self, job):
+        from app.integrations.feishu_jobs import numbered_choice_context
+
+        rows = [
+            row for row in reversed(self.rows)
+            if row["job_id"] != job["job_id"]
+            and row["created_at"] <= job["created_at"]
+            and all(
+                row[key] == job[key]
+                for key in ("app_id", "tenant_key", "chat_id", "user_open_id")
+            )
+        ]
+        return numbered_choice_context(rows, job["created_at"])
 
 
 class Planner:

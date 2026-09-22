@@ -97,13 +97,8 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export async function api<T>(
-  path: string,
-  token: string,
-  signal?: AbortSignal,
-): Promise<T> {
+export async function api<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
     signal,
     cache: "no-store",
   });
