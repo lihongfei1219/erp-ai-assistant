@@ -5,7 +5,13 @@ description = "Read-only ERP sales-order analysis pilot"
 requires-python = ">=3.11,<3.15"
 dependencies = [
     "fastapi==0.141.1",
+    "httpx==0.28.1",
+    "httpx2==2.13.0",
     "lark-oapi==1.7.3",
+    "langgraph==1.2.12",
+    "langgraph-checkpoint-sqlite==3.1.1",
+    "langsmith==0.14.0",
+    "openai==3.16.2",
     "pandas==3.0.5",
     "psutil==7.2.2",
     "pydantic==2.13.5",
@@ -13,20 +19,26 @@ dependencies = [
     "plotly==7.1.0",
     "pyodbc==5.3.0",
     "sqlalchemy==2.0.54",
+    "starlette==1.6.0",
     "uvicorn==0.53.0",
 ]
 
 [dependency-groups]
-dev = ["httpx==0.28.1", "pytest==9.1.1", "ruff==0.16.7"]
+dev = ["pytest==9.1.1", "ruff==0.16.7"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
 markers = ["integration: explicit opt-in local SQL Server checks"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+src = ["backend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
+
+[tool.uv]
+package = false
+cache-dir = ".local/uv-cache"

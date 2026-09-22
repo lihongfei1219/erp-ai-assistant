@@ -1,6 +1,6 @@
 # 飞书应用机器人接入
 
-本步骤连接用于群内 @问答的 **企业自建应用机器人**。日报自定义机器人Webhook与其凭据和作用不同。本页说明首次应用配置与连接测试；完成后按[飞书自然语言分析](feishu-analytics.md)启用`--sales`六类问数。本机现有应用已接入，不需要重复发现或授权。
+本步骤连接用于群内 @问答的 **企业自建应用机器人**。日报自定义机器人Webhook与其凭据和作用不同。本页说明首次应用配置与连接测试；完成后按[飞书自然语言分析](feishu-analytics.md)启用`--sales`四域问数。网页启动命令不会启动飞书机器人，需要另开终端运行机器人并保持进程在线。已有应用应优先恢复原有私有配置，不需要重新创建应用；只有缺少群／用户授权标识时才需要重新发现。
 
 ## 1. 创建应用并填写凭据
 
@@ -18,14 +18,14 @@
 }
 ```
 
-本机已准备空模板。其他机器可复制 `backend/config/feishu-app.example.json`，不要覆盖已有凭据。UTF-8 保存，保留双引号；密钥不用发到聊天中。
+此文件不随Git代码或uv依赖安装恢复。缺少配置且没有备份时，可复制 `backend/config/feishu-app.example.json` 到上述路径并填写，不要覆盖已有凭据。UTF-8 保存，保留双引号；密钥不用发到聊天中。空模板不能用于连接或接收消息。
 
 也支持 `FEISHU_APP_ID`、`FEISHU_APP_SECRET` 进程环境变量，优先于文件；群、用户和租户授权仍在文件配置。`.env` 不自动读取。配置修改后重启连接进程。
 
 在项目根目录执行离线检查（不会请求飞书）：
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\start_feishu_bot.py --check
+uv run python .\scripts\start_feishu_bot.py --check
 ```
 
 ## 2. 开通权限和机器人可见范围
@@ -44,13 +44,13 @@
 先验证应用凭据和机器人身份（不发送消息）：
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\start_feishu_bot.py --probe
+uv run python .\scripts\start_feishu_bot.py --probe
 ```
 
 再启动发现模式：
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\start_feishu_bot.py --discover
+uv run python .\scripts\start_feishu_bot.py --discover
 ```
 
 保持进程运行，看到“飞书长连接已建立”后，在应用后台“事件与回调／事件订阅”选择 **使用长连接接收事件**，保存并添加 **接收消息 v2.0**（`im.message.receive_v1`）。如这些变更要求重新发布，请发布后再测试。长连接由本机主动访问飞书，不需要本机公网回调地址。
@@ -87,7 +87,7 @@
 按 Ctrl+C 停止发现模式，运行：
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\start_feishu_bot.py --listen
+uv run python .\scripts\start_feishu_bot.py --listen
 ```
 
 再次在群内 @机器人发送“连接测试”，预期在原消息下收到：

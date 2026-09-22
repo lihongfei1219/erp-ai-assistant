@@ -401,7 +401,8 @@ async def test_unsupported_operation_choices_advance_only_affected_goal(
             multi_report,
             planner,
             date(2026, 9, 22),
-            previous=first.context,
+            # Each alternative is a separate imported fixture conversation.
+            previous=first.context.model_copy(update={"runtime_ref": None}),
         )
         assert result.turn.status == "result", (choice.label, result.turn.clarification)
         assert result.context.intents[0] == first.context.intents[0]
@@ -476,7 +477,8 @@ async def test_operation_recovery_clears_only_obsolete_conditions(multi_report, 
             multi_report,
             planner,
             date(2026, 9, 22),
-            previous=first.context,
+            # Each alternative is a separate imported fixture conversation.
+            previous=first.context.model_copy(update={"runtime_ref": None}),
         )
         if issue_kind == "dependency":
             assert result.turn.result is None
@@ -530,7 +532,8 @@ async def test_cancelling_return_comparison_preserves_other_or_unscoped_issue(
             multi_report,
             planner,
             date(2026, 9, 22),
-            previous=first.context,
+            # Each alternative is a separate imported fixture conversation.
+            previous=first.context.model_copy(update={"runtime_ref": None}),
         )
         assert result.turn.result is None
         assert original_issue in result.context.issues

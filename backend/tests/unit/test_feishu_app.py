@@ -55,6 +55,25 @@ def test_config_validates_without_exposing_secret(tmp_path, monkeypatch):
     assert "sensitive" not in str(caught.value)
 
 
+def test_missing_config_explains_setup_without_exposing_partial_secret(tmp_path, monkeypatch):
+    monkeypatch.delenv("FEISHU_APP_ID", raising=False)
+    monkeypatch.setenv("FEISHU_APP_SECRET", "secret-never-log")
+    with pytest.raises(AppConfigError) as caught:
+        load_config(tmp_path / "missing.json")
+    assert "配置文件不存在" in str(caught.value)
+    assert "--config" in str(caught.value)
+    assert "secret-never-log" not in str(caught.value)
+
+
+def test_environment_credentials_still_need_explicit_group_authorization(tmp_path, monkeypatch):
+    monkeypatch.setenv("FEISHU_APP_ID", "cli_test")
+    monkeypatch.setenv("FEISHU_APP_SECRET", "secret-never-log")
+    settings = load_config(tmp_path / "missing.json")
+    settings.require_credentials()
+    with pytest.raises(AppConfigError):
+        settings.require_authorized_groups()
+
+
 def test_discovery_records_ids_without_reply_or_message_content(config, tmp_path):
     bot = ConnectionBot(config, "ou_bot", tmp_path, discover=True)
     assert bot.accept(event(text="this is private content")) == "discovered"

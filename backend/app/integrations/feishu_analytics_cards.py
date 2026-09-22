@@ -148,7 +148,10 @@ def _card(response: AnalysisResponse, row_limit: int, charts: bool) -> dict:
     elements += [
         panel("统计口径与数据说明", "\n\n".join(explanation)),
         text(f"查询编号 {response.run_id}", muted=True),
-        text("30分钟内可继续 @我 追问，例如“换成按订单数排”或“再看每日趋势”。", muted=True),
+        text(
+            "30分钟内可在本群继续 @我，说明想修改的条件或接着想了解什么；"
+            "如需开始新话题，发送“重新开始”。", muted=True,
+        ),
     ]
     title = response.results[0].title if len(response.results) == 1 else "AI 数据分析"
     return {

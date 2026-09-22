@@ -61,6 +61,14 @@ def load_config(path: Path = DEFAULT_CONFIG) -> AppConfig:
     except (OSError, ValueError, ValidationError):
         # Pydantic errors may include input values; never print them for credential files.
         raise AppConfigError("无法读取应用配置，请检查 JSON 格式、字段名称和文件权限") from None
+    if not path.is_file() and (
+        not config.app_id or not config.app_secret.get_secret_value().strip()
+    ):
+        raise AppConfigError(
+            "飞书配置文件不存在，且环境变量中的应用凭据不完整。"
+            "请恢复 .local/feishu-app.json（自定义路径使用 --config），"
+            "或按 docs/feishu-app-setup.md 配置；启动网页不会自动启动飞书机器人。"
+        )
     config.require_credentials()
     return config
 

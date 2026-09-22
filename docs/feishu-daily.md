@@ -12,7 +12,7 @@
 
 ```powershell
 Set-Location backend
-..\.venv\Scripts\python.exe -m workers.feishu_daily --date 2026-09-16 --demo
+uv run python -m workers.feishu_daily --date 2026-09-16 --demo
 ```
 
 输出日报和卡片 JSON 到被 Git 忽略的 `.local/`。`--output` 可指定新文件，不覆盖已有预览；`--report-path` 可指定另一经营快照。
@@ -32,7 +32,7 @@ Set-Location backend
 在 `backend/` 手动发送（执行此命令才对外发送）：
 
 ```powershell
-..\.venv\Scripts\python.exe -m workers.feishu_daily --date 2026-09-16 --demo --send
+uv run python -m workers.feishu_daily --date 2026-09-16 --demo --send
 ```
 
 本机接口无需访问令牌；飞书发送仍需服务端配置Webhook：
@@ -48,7 +48,7 @@ Set-Location backend
 群配置和每日数据更新就绪后，在 `backend/` 运行：
 
 ```powershell
-..\.venv\Scripts\python.exe -m workers.feishu_daily --watch --report-path ../.local/reports/platform-operating-20260916.json
+uv run python -m workers.feishu_daily --watch --report-path ../.local/reports/platform-operating-20260916.json
 ```
 
 这是独立常驻进程，**必须保持进程与电脑运行**；按 Ctrl+C 停止。前后端启动不会自动启动它。每 30 秒检查一次，08:00 后执行，可能有约 30 秒偏差；晚启动会尝试当天任务，不回放过去多天。

@@ -1,6 +1,7 @@
 """Durable bridge between Feishu's synchronous worker and shared analysis planning."""
 
 import asyncio
+import json
 from datetime import date
 
 from pydantic import ValidationError
@@ -11,7 +12,8 @@ from app.analysis.analytics import execute_analysis
 from app.analysis.planning import describe_interpretation, resolve_question
 from app.analysis.sales_query import QueryUnavailable
 from app.integrations.feishu_analytics_cards import render_analysis
-from app.integrations.feishu_cards import information_card
+from app.integrations.feishu_guidance import numbered_choices as _numbered_choices
+from app.integrations.feishu_guidance import render_guidance as _render_guidance
 from app.schemas.analytics import AnalysisPlan, AnalysisQuestion
 from app.semantic.context import snapshot_key as snapshot_key
 from app.semantic.dialogue_schemas import ConversationRequest, DialogueTurn
@@ -46,40 +48,6 @@ def _save(store, job, payload):
     if not store.replace_payload(job, payload):
         raise QueryUnavailable("任务已被重新领取，请重新提问。")
     job["payload"] = payload
-
-
-def _numbered_choices(turn: DialogueTurn):
-    # The web can render a date picker. Feishu accepts dates as ordinary text.
-    return [choice for choice in turn.choices if choice.action.kind != "date_range"]
-
-
-def _render_guidance(payload):
-    lines = []
-    turn = (
-        DialogueTurn.model_validate(payload["dialogue_turn"])
-        if payload.get("dialogue_turn") else None
-    )
-    if turn is not None:
-        if turn.understood_summary:
-            lines.append("我已理解：" + turn.understood_summary)
-        if turn.applied_defaults:
-            lines.append("当前默认：" + "；".join(turn.applied_defaults))
-        if turn.clarification is not None:
-            lines.append(turn.clarification.question)
-        numbered = payload.get("number_reply_allowed", True)
-        for index, choice in enumerate(_numbered_choices(turn), 1):
-            prefix = f"{index}. " if numbered else "• "
-            lines.append(prefix + choice.label)
-    if payload.get("notice"):
-        lines.append(payload["notice"])
-    lines.append("可以直接用自己的话补充、修改条件，或用文字说明想选的建议。")
-    if turn is not None and _numbered_choices(turn) and payload.get("number_reply_allowed", True):
-        lines.append("若当前只有这一轮待答建议，也可以回复对应数字。")
-    text = "\n\n".join(lines)
-    return {
-        "semantic_status": payload["status"],
-        "reply_card": information_card("继续完善分析", text),
-    }, text
 
 
 def _store_result(result):
@@ -120,8 +88,15 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
             return _number_needs_words(job, store, previous, key)
         conversation = SemanticContext.model_validate(candidate["semantic_context"])
         body = ConversationRequest(choice_id=choices[index].id)
+    body = body.model_copy(update={"request_id": "job-" + str(job["job_id"])})
+    owner = json.dumps([
+        job.get("app_id") or getattr(store, "app_id", ""),
+        job.get("tenant_key") or getattr(store, "tenant_key", ""),
+        job["chat_id"], job["user_open_id"],
+    ])
     outcome = asyncio.run(converse(
         body, report, planner, date.fromisoformat(original["today"]), previous=conversation,
+        channel="feishu", owner=owner,
     ))
     turn = outcome.turn
     common = {

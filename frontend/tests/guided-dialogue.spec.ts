@@ -93,6 +93,7 @@ test("guidance shows known conditions without an error and free replies keep cur
   await ask(page, "改成九月五号，取消商品限制");
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1]).toEqual({
+    request_id: expect.any(String),
     question: "改成九月五号，取消商品限制",
     conversation_token: "pending-token-1",
   });
@@ -119,6 +120,7 @@ test("date selection sends the signed choice and exact exclusive end without rew
   await page.getByRole("button", { name: "应用日期" }).click();
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1]).toEqual({
+    request_id: expect.any(String),
     choice_id: "choose-dates",
     date_range: { start: "2026-09-05", end_exclusive: "2026-09-08" },
     conversation_token: "pending-token-1",
@@ -182,11 +184,31 @@ test("cloud failure keeps input for retry and never renders a guidance card as a
   );
   await page.getByRole("button", { name: "重试本次请求" }).click();
   await expect(page.getByRole("region", { name: "分析引导" })).toBeVisible();
-  expect(bodies[1]).toEqual(bodies[0]);
+  expect(bodies[1].request_id).not.toBe(bodies[0].request_id);
+  expect({ ...bodies[1], request_id: null }).toEqual({
+    ...bodies[0],
+    request_id: null,
+  });
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByLabel("分析问题", { exact: true })).toHaveValue(
     "查看商品表现",
   );
+});
+
+test("network failure retries the same request identity", async ({ page }) => {
+  const bodies: Record<string, unknown>[] = [];
+  await page.route("**/api/v1/analysis/converse", async (route) => {
+    bodies.push(route.request().postDataJSON());
+    if (bodies.length === 1) await route.abort("failed");
+    else await route.fulfill({ json: pending });
+  });
+  await enter(page);
+  await ask(page, "查看商品表现");
+  await page.getByRole("button", { name: "重试本次请求" }).click();
+  await expect(page.getByRole("region", { name: "分析引导" })).toBeVisible();
+  expect(bodies).toHaveLength(2);
+  expect(bodies[0].request_id).toBeTruthy();
+  expect(bodies[1]).toEqual(bodies[0]);
 });
 
 test("recovering an expired date choice retains the user's selected range", async ({
@@ -244,6 +266,7 @@ test("current alternative submits its choice id while stale replies cannot resto
   await page.getByRole("button", { name: "改看订单数" }).click();
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1]).toEqual({
+    request_id: expect.any(String),
     choice_id: "metric-orders",
     conversation_token: "pending-token-1",
   });

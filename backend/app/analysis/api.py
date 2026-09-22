@@ -13,6 +13,7 @@ from app.analysis.dialogue import converse as resolve_dialogue
 from app.analysis.operations import DOMAIN_LABELS, domain_dates, executable_domains
 from app.analysis.planning import resolve_question
 from app.analysis.sales_query import QueryUnavailable
+from app.orchestration.store import GraphConflict
 from app.schemas.analytics import AnalysisPlan, AnalysisQuestion, AnalysisResponse
 from app.schemas.sales import SalesReport
 from app.semantic.catalog import load_catalog
@@ -152,6 +153,8 @@ def register_analysis_routes(router, get_report, planner=None, *, context_secret
             return outcome.turn.model_copy(update={"conversation_token": token})
         except DialogueChoiceUnavailable as exc:
             raise HTTPException(409, {"code": "choice_expired", "message": str(exc)}) from None
+        except GraphConflict as exc:
+            raise HTTPException(409, {"code": exc.code, "message": str(exc)}) from None
         except SemanticProviderUnavailable as exc:
             raise HTTPException(503, str(exc)) from None
         except QueryUnavailable as exc:

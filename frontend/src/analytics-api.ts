@@ -69,6 +69,7 @@ export interface AnalysisResponse {
 }
 
 export interface DialogueRequest {
+  request_id?: string;
   question?: string;
   conversation_token: string | null;
   choice_id?: string;

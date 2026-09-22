@@ -76,6 +76,49 @@ def describe_interpretation(
     return descriptions
 
 
+def prepare_semantic_input(body, report, today, previous=None):
+    start, end = available_dates(report)
+    if previous and previous.catalog_version != load_catalog()["version"]:
+        previous = None
+    if previous is None and body.previous_plan is not None:
+        previous = context_from_plan(body.previous_plan)
+    return SemanticInput(
+        question=body.question,
+        today=today,
+        timezone=report.operating.policy.business_timezone,
+        previous=previous.model_copy(
+            update={"dialogue_choices": [], "dialogue_id": None, "runtime_ref": None}
+        )
+        if previous
+        else None,
+        capabilities={
+            "available_start": start.isoformat(),
+            "available_end_exclusive": end.isoformat(),
+            "all_buyers_authorized": report.metadata.scope.all_buyers,
+            "executable_domains": executable_domains(report),
+            "domain_capabilities": {
+                domain: {
+                    "metrics": sorted(DOMAIN_METRICS[domain]),
+                    "targets": sorted(TARGETS[domain]),
+                    "available_start": domain_dates(report, domain)[0].isoformat(),
+                    "available_end_exclusive": domain_dates(report, domain)[1].isoformat(),
+                    **(
+                        {"snapshot_as_of": report.operations.inventory.as_of.isoformat()}
+                        if domain == "inventory"
+                        else {}
+                    ),
+                }
+                for domain in executable_domains(report)
+                if domain != "sales"
+            },
+            "metrics": ["amount", "orders"],
+            "executable_targets": ["product", "buyer"],
+            "analyses": list(TITLES),
+            "object_filters": False,
+        },
+    )
+
+
 async def resolve_question(
     body: AnalysisQuestion,
     report: SalesReport,
@@ -86,44 +129,8 @@ async def resolve_question(
 ) -> PlanningResult:
     start, end = available_dates(report)
     if hasattr(planner, "interpret"):
-        previous = conversation
-        if previous and previous.catalog_version != load_catalog()["version"]:
-            previous = None
-        if previous is None and body.previous_plan is not None:
-            previous = context_from_plan(body.previous_plan)
-        request = SemanticInput(
-            question=body.question,
-            today=today,
-            timezone=report.operating.policy.business_timezone,
-            previous=previous.model_copy(update={"dialogue_choices": [], "dialogue_id": None})
-            if previous
-            else None,
-            capabilities={
-                "available_start": start.isoformat(),
-                "available_end_exclusive": end.isoformat(),
-                "all_buyers_authorized": report.metadata.scope.all_buyers,
-                "executable_domains": executable_domains(report),
-                "domain_capabilities": {
-                    domain: {
-                        "metrics": sorted(DOMAIN_METRICS[domain]),
-                        "targets": sorted(TARGETS[domain]),
-                        "available_start": domain_dates(report, domain)[0].isoformat(),
-                        "available_end_exclusive": domain_dates(report, domain)[1].isoformat(),
-                        **(
-                            {"snapshot_as_of": report.operations.inventory.as_of.isoformat()}
-                            if domain == "inventory"
-                            else {}
-                        ),
-                    }
-                    for domain in executable_domains(report)
-                    if domain != "sales"
-                },
-                "metrics": ["amount", "orders"],
-                "executable_targets": ["product", "buyer"],
-                "analyses": list(TITLES),
-                "object_filters": False,
-            },
-        )
+        request = prepare_semantic_input(body, report, today, conversation)
+        previous = request.previous
         semantic = await planner.interpret(request)
         compiled = compile_request(
             semantic,

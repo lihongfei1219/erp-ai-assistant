@@ -666,7 +666,9 @@ def _apply_choice(body, previous, today, *, domains=("sales",)):
     )
 
 
-async def converse(body: ConversationRequest, report, planner, today: date, *, previous=None):
+async def legacy_converse(
+    body: ConversationRequest, report, planner, today: date, *, previous=None
+):
     start, end = available_dates(report)
     analysis_body = AnalysisQuestion(question=body.question or "应用已选择的条件")
     if body.choice_id:
@@ -676,15 +678,23 @@ async def converse(body: ConversationRequest, report, planner, today: date, *, p
         resolution = await resolve_question(
             analysis_body, report, planner, today, conversation=previous
         )
+    result = None
+    if resolution.plan is not None:
+        result = await run_in_threadpool(execute_analysis, report, resolution.plan)
+        result = result.model_copy(update={"interpretation": resolution.interpretation})
+    return build_turn(resolution, report, today, previous=previous, result=result)
+
+
+def build_turn(resolution, report, today, *, previous=None, result=None):
     context = (
         resolution.semantic.context if resolution.semantic else context_from_plan(resolution.plan)
     )
     draft, summary, defaults = _draft(context)
-    result, clarification, choices, stored = None, None, [], []
+    clarification, choices, stored = None, [], []
     key, attempts = None, 0
     if resolution.plan is not None:
-        result = await run_in_threadpool(execute_analysis, report, resolution.plan)
-        result = result.model_copy(update={"interpretation": resolution.interpretation})
+        if result is None:
+            raise ValueError("Executable resolution requires a computed result")
         status = "result"
     else:
         status = {
@@ -751,4 +761,14 @@ async def converse(body: ConversationRequest, report, planner, today: date, *, p
             available_dates=AvailableDates(start=start, end_exclusive=end),
         ),
         context,
+    )
+
+
+async def converse(
+    body, report, planner, today, *, previous=None, channel="web", owner="local-workspace"
+):
+    from app.orchestration.runtime import run_dialogue
+
+    return await run_dialogue(
+        body, report, planner, today, previous=previous, channel=channel, owner=owner
     )

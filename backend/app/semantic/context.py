@@ -50,7 +50,11 @@ def encode_context(
     if len(secret) < 32:
         raise QueryUnavailable("会话签名未配置，请检查服务端会话密钥。")
     value = {
-        "context": context.model_dump(mode="json"),
+        **(
+            {"graph": context.runtime_ref.model_dump(mode="json")}
+            if context.runtime_ref
+            else {"context": context.model_dump(mode="json")}
+        ),
         "snapshot": snapshot_key(report),
         "expires": (time.time() if now is None else now) + 1800,
     }
@@ -73,7 +77,18 @@ def decode_context(
         clock = time.time() if now is None else now
         if value["expires"] <= clock or value["snapshot"] != snapshot_key(report):
             raise ValueError("stale context")
-        context = SemanticContext.model_validate(value["context"])
+        if "graph" in value:
+            from app.orchestration.runtime import binding_for
+            from app.orchestration.store import GraphStore, owner_key
+            from app.semantic.schemas import GraphReference
+
+            context = GraphStore("web").load_context(
+                GraphReference.model_validate(value["graph"]),
+                binding_for(report),
+                owner=owner_key("local-workspace"),
+            )
+        else:
+            context = SemanticContext.model_validate(value["context"])
         if context.catalog_version != load_catalog()["version"]:
             raise ValueError("changed semantics")
         return context

@@ -9,6 +9,12 @@ from app.connectors.qy import SalesExtract
 from app.schemas.sales import AnalysisWindow, DataScope
 
 
+@pytest.fixture(autouse=True)
+def isolated_graph_store(monkeypatch, tmp_path):
+    monkeypatch.setenv("ERP_GRAPH_STATE_DIR", str(tmp_path / "langgraph"))
+    monkeypatch.setenv("ERP_ANALYSIS_ENGINE", "langgraph")
+
+
 @pytest.fixture
 def window():
     return AnalysisWindow(start="2026-09-01", end="2026-09-04")
