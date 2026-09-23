@@ -59,7 +59,10 @@ def main(argv=None) -> int:
         if not (args.probe or args.discover or args.listen or args.sales):
             try:
                 config.require_authorized_groups()
-                print("租户、群和用户授权配置已填写；可执行 --probe 或 --listen。")
+                label = (
+                    "授权群全员" if config.user_access_mode == "all_group_members" else "用户白名单"
+                )
+                print(f"租户与群授权配置已填写；当前为{label}模式，可执行 --probe 或 --listen。")
             except AppConfigError:
                 print("尚未完成群／用户授权；下一步执行 --discover。")
             return 0

@@ -81,6 +81,27 @@ def test_unauthorized_never_enters_store():
     assert store.rows == []
 
 
+def test_group_mode_accepts_distinct_users_without_changing_identity():
+    current = config().model_copy(update={"user_access_mode": "all_group_members"})
+    bot, store = bot_for(loader=lambda: current)
+    for index, user in enumerate(("ou_member_a", "ou_member_b")):
+        assert bot.accept(event(user=user, message_id=f"om_{index}")) == "queued"
+    assert [row["user_open_id"] for row in store.rows] == ["ou_member_a", "ou_member_b"]
+
+
+@pytest.mark.parametrize("stage", ["queued", "ready"])
+def test_group_mode_revocation_blocks_queued_and_prepared_replies(stage):
+    current = config().model_copy(update={"user_access_mode": "all_group_members"})
+    bot, store = bot_for(loader=lambda: current)
+    assert bot.accept(event(user="ou_other")) == "queued"
+    if stage == "ready":
+        job = store.claim()
+        store.finish_analysis(job, {}, "prepared reply")
+    current = config()
+    assert bot.process_pending(lambda *args: pytest.fail("revoked user")) == 0
+    assert store.rows[0]["status"] == "revoked"
+
+
 def test_revocation_after_enqueue_prevents_analysis_and_reply():
     current = config()
     bot, store = bot_for(loader=lambda: current)

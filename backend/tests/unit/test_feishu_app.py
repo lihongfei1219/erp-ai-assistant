@@ -9,6 +9,7 @@ from app.integrations.feishu_app import (
     AppConfigError,
     ConnectionBot,
     ReplyRejected,
+    authorized_identity,
     load_config,
     probe_bot,
     reply_text,
@@ -72,6 +73,59 @@ def test_environment_credentials_still_need_explicit_group_authorization(tmp_pat
     settings.require_credentials()
     with pytest.raises(AppConfigError):
         settings.require_authorized_groups()
+
+
+def test_group_mode_loads_without_user_allowlist(config, tmp_path, monkeypatch):
+    monkeypatch.delenv("FEISHU_APP_ID", raising=False)
+    monkeypatch.delenv("FEISHU_APP_SECRET", raising=False)
+    data = config.model_dump(mode="json")
+    data.update(user_access_mode="all_group_members", allowed_user_open_ids=[])
+    path = tmp_path / "config.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    settings = load_config(path)
+    settings.require_authorized_groups()
+    data["user_access_mode"] = "all"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(AppConfigError):
+        load_config(path)
+    data.pop("user_access_mode")
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(AppConfigError):
+        load_config(path).require_authorized_groups()
+
+
+@pytest.mark.parametrize("changes", [{"tenant_key": ""}, {"allowed_chat_ids": ()}])
+def test_group_mode_still_requires_explicit_scope(config, changes):
+    settings = config.model_copy(update={"user_access_mode": "all_group_members", **changes})
+    with pytest.raises(AppConfigError):
+        settings.require_authorized_groups()
+
+
+def test_group_mode_accepts_unlisted_user_and_can_be_revoked(config, tmp_path):
+    settings = config.model_copy(update={"user_access_mode": "all_group_members"})
+    bot = ConnectionBot(settings, "ou_bot", tmp_path)
+    assert bot.accept(event(user="ou_other")) == "queued"
+    reopened = ConnectionBot(config, "ou_bot", tmp_path)
+    assert reopened.process_pending(lambda *a: pytest.fail("revoked user")) == 0
+
+
+@pytest.mark.parametrize("changes", [
+    {"chat": "oc_other"}, {"app": "cli_other"}, {"tenant": "other"},
+    {"bot": "ou_other_bot"}, {"user": "ou_bot"},
+])
+def test_group_mode_does_not_bypass_event_boundaries(config, tmp_path, changes):
+    settings = config.model_copy(update={"user_access_mode": "all_group_members"})
+    bot = ConnectionBot(settings, "ou_bot", tmp_path)
+    assert bot.accept(event(**changes)) == "ignored"
+
+
+@pytest.mark.parametrize("user", [None, "", "ou_", "invalid"])
+def test_group_mode_requires_valid_user_identity(config, user):
+    settings = config.model_copy(update={"user_access_mode": "all_group_members"})
+    assert not authorized_identity(settings, {
+        "app_id": config.app_id, "tenant_key": config.tenant_key,
+        "chat_id": config.allowed_chat_ids[0], "user_open_id": user,
+    })
 
 
 def test_discovery_records_ids_without_reply_or_message_content(config, tmp_path):

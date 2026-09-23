@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 
@@ -32,6 +33,7 @@ class AppConfig(BaseModel):
     tenant_key: str = ""
     allowed_chat_ids: tuple[str, ...] = ()
     allowed_user_open_ids: tuple[str, ...] = ()
+    user_access_mode: Literal["allowlist", "all_group_members"] = "allowlist"
 
     def require_credentials(self):
         if not re.fullmatch(r"cli_[A-Za-z0-9_]+", self.app_id):
@@ -41,8 +43,10 @@ class AppConfig(BaseModel):
 
     def require_authorized_groups(self):
         self.require_credentials()
-        if not self.tenant_key or not self.allowed_chat_ids or not self.allowed_user_open_ids:
-            raise AppConfigError("请先用 --discover 获取标识并配置租户、授权群与运营用户")
+        if not self.tenant_key or not self.allowed_chat_ids:
+            raise AppConfigError("请先用 --discover 获取标识并配置租户与授权群")
+        if self.user_access_mode == "allowlist" and not self.allowed_user_open_ids:
+            raise AppConfigError("用户白名单模式需要配置 allowed_user_open_ids")
         if not all(value.startswith("oc_") for value in self.allowed_chat_ids):
             raise AppConfigError("allowed_chat_ids 应填写 oc_ 开头的群 ID")
         if not all(value.startswith("ou_") for value in self.allowed_user_open_ids):
@@ -158,10 +162,13 @@ def extract_group_message(data, app_id: str, bot_id: str):
 
 
 def authorized_identity(config: AppConfig, item: dict) -> bool:
+    user = item.get("user_open_id")
     return (item.get("app_id") == config.app_id
             and item.get("tenant_key") == config.tenant_key
             and item.get("chat_id") in config.allowed_chat_ids
-            and item.get("user_open_id") in config.allowed_user_open_ids)
+            and isinstance(user, str) and user.startswith("ou_") and len(user) > 3
+            and (config.user_access_mode == "all_group_members"
+                 or user in config.allowed_user_open_ids))
 
 
 class ConnectionBot:

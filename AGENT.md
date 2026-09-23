@@ -8,6 +8,7 @@
 - Python由uv项目管理：根目录`pyproject.toml`声明依赖、`uv.lock`锁定版本、`.python-version`选择3.11，使用`uv sync --locked`和`uv run`；不再维护独立requirements锁文件。技术栈为FastAPI、Pandas/Decimal、Pydantic AI、LangGraph、SQLAlchemy/pyodbc；前端React/TypeScript/Vite仍由npm及package-lock.json管理，网页Plotly本机脚本，飞书原生卡片2.0。
 - ERP来源为本机SQL Server恢复库`ERP_Local`，业务源只读。用户确认备份覆盖全平台商家。分析使用`.local/reports`快照，飞书任务／结果／发件箱使用独立`ERP_AI_Assistant.erp_ai.feishu_sales_jobs`。
 - 飞书应用机器人已有授权群和用户，`scripts/start_feishu_bot.py --sales`启用问数；日报Webhook是另一通道，尚未启用真实定时推送。
+- 飞书 `user_access_mode` 默认 `allowlist`；用户已授权当前内部群启用 `all_group_members`，只免除群内逐人白名单，应用／租户／群和有效用户身份校验、发送前复核及按用户隔离追问仍保留。不得把空白名单解释为全员开放。
 - 用户允许按已记录的常识默认规则继续开发，不因一般口径待确认反复停工。基础设施升级需业务或性能证据，不预先增加分布式引擎、多Agent或队列平台。
 
 ## 数据与模型边界
