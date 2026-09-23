@@ -253,10 +253,10 @@ def test_numbered_context_survives_restart_and_is_identity_scoped(store):
     assert SqlJobStore(store.app_id, "another").latest_numbered_choice_context(current) is None
 
 
-@pytest.mark.parametrize("intervening", ["another_guide", "failed_question", "unknown", "clear"])
-def test_numbered_context_does_not_rebind_after_another_round_or_question(store, intervening):
+@pytest.mark.parametrize("intervening", ["failed_question", "unknown", "clear"])
+def test_numbered_context_blocks_latest_unavailable_task_or_clear(store, intervening):
     deliver_guidance(store, 1, round_id="round-1")
-    if intervening in {"another_guide", "unknown"}:
+    if intervening == "unknown":
         deliver_guidance(
             store, 2, round_id="round-2", status="unknown" if intervening == "unknown" else "sent",
         )
@@ -268,3 +268,9 @@ def test_numbered_context_does_not_rebind_after_another_round_or_question(store,
         outgoing = store.next_reply()
         store.mark(outgoing["job_id"], "sent")
     assert store.latest_numbered_choice_context(numbered_reply(store)) is None
+
+
+def test_latest_delivered_guidance_supersedes_older_round_in_database(store):
+    deliver_guidance(store, 1, round_id="round-1")
+    latest = deliver_guidance(store, 2, round_id="round-2")
+    assert store.latest_numbered_choice_context(numbered_reply(store)) == latest

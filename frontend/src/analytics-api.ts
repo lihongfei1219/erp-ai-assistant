@@ -19,6 +19,11 @@ export interface AnalysisStep {
   dimension?: "product" | "buyer";
   comparison_start_date?: string;
   comparison_end_date_exclusive?: string;
+  filters?: {
+    field: "product" | "buyer";
+    operator: "include" | "exclude" | "equal";
+    code: string;
+  }[];
 }
 export interface AnalysisPlan {
   steps: AnalysisStep[];

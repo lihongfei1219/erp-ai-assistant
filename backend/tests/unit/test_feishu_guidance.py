@@ -7,6 +7,7 @@ from app.analysis.operations import domain_dates
 from app.integrations.feishu_guidance import coverage_text, help_text, render_guidance
 from app.integrations.feishu_sales import SalesBot
 from tests.unit.test_feishu_analytics import AnalyticsStore, ask
+from tests.unit.test_feishu_cards import walk
 from tests.unit.test_feishu_sales import config
 
 
@@ -43,7 +44,9 @@ def test_dates_use_affected_goal_and_inclusive_end_without_a_fake_picker():
     assert "自己选择日期" not in text
     assert "1. 使用备份日期" in text and "2." not in text
     assert "再次 @我" in text
-    assert "保留商品限定和其他组合目标" in text
+    assert "保留商品限定和其他组合目标" not in text
+    assert "保留商品限定和其他组合目标" in json.dumps(result, ensure_ascii=False)
+    assert len(text) < 200
     assert "conversation_token" not in json.dumps(result)
     assert json.dumps(source) == before
 
@@ -62,12 +65,36 @@ def test_ambiguous_number_is_not_invited_again_and_preserves_plain_text():
     source.update(number_reply_allowed=False, notice="请用文字说明选择")
     result, text = render_guidance(source)
     assert "回复编号" not in text and "1." not in text
-    assert "• 使用备份日期" in text and "不用重写整个问题" in text
-    nodes = result["reply_card"]["elements"]
-    content = [node["text"] for node in nodes if node["tag"] == "div"]
+    assert "• 使用备份日期" in text
+    nodes = walk(result["reply_card"])
+    content = [node["text"] for node in nodes if node.get("tag") == "div"]
     assert all(node["tag"] == "plain_text" for node in content)
     assert any(hostile in node["content"] for node in content)
     assert text.startswith("请用文字说明选择")
+
+
+def test_long_conditions_and_defaults_are_collapsed_not_lost():
+    source = payload(
+        understood_summary="保留客户和商品筛选。" * 100,
+        applied_defaults=["默认销售金额", "默认前10项"],
+    )
+    result, text = render_guidance(source)
+    roots = result["reply_card"]["body"]["elements"]
+    details = [node for node in roots if node["tag"] == "collapsible_panel"]
+    assert len(details) == 1 and details[0]["expanded"] is False
+    assert "保留客户和商品筛选。" * 100 in json.dumps(details, ensure_ascii=False)
+    assert "默认销售金额" not in text and len(text) < 200
+    assert "都不是" in text
+
+
+def test_no_safe_alternatives_keeps_question_and_free_text_without_fake_choices():
+    source = payload(choices=[])
+    source["dialogue_turn"]["clarification"].update(
+        field="conditions", kind="dependency", question="你想按什么关系关联销售和退货？"
+    )
+    _, text = render_guidance(source)
+    assert "你想按什么关系关联销售和退货？" in text
+    assert "文字" in text and "回复编号" not in text
 
 
 def test_help_and_coverage_reach_bot_without_calling_model(multi_report):

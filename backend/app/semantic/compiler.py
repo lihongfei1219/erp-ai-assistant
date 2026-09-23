@@ -10,8 +10,8 @@ from uuid import uuid4
 from pydantic import ValidationError
 
 from app.capabilities.registry import (
+    FILTER_FIELDS,
     MAX_STEPS,
-    OBJECT_FILTERS,
     TARGETS,
     semantic_metrics,
     target_supported,
@@ -64,6 +64,10 @@ def context_from_plan(plan: AnalysisPlan) -> SemanticContext:
                 limit=step.top_n,
                 order=step.order,
                 id=_new_id("goal"),
+                filters=[
+                    SemanticFilter(field=f.field, operator=f.operator, value=f.code)
+                    for f in step.filters
+                ],
             )
         )
     return SemanticContext(intents=intents)
@@ -683,6 +687,7 @@ def compile_request(
         clarification_attempts=previous.clarification_attempts
         if previous and request.mode != "new"
         else 0,
+        entity_bindings=previous.entity_bindings if previous and request.mode != "new" else [],
     )
 
     def stop(status, message, pending=(), *, restate=False, intent_id=None):
@@ -756,10 +761,10 @@ def compile_request(
             ["target"],
             intent_id=item.id,
         )
-    if not OBJECT_FILTERS and any(i.filters for i in intents):
+    if any(f.field not in FILTER_FIELDS[i.domain] for i in intents for f in i.filters):
         return stop(
             "unsupported",
-            "已理解你的筛选要求；指定商品、客户、类别、仓库等筛选尚未接入，不能忽略条件后执行。",
+            "已保留筛选条件；当前支持商品和客户筛选，库存仅支持商品，类别、仓库等尚未接入。",
         )
     unsupported_metrics = [
         i
@@ -875,6 +880,7 @@ def compile_request(
             end_date_exclusive=end,
             metric="amount" if kind == "summary" and item.domain == "sales" else metric,
             order=item.order or "descending",
+            filters=[dict(field=f.field, operator=f.operator, code=f.value) for f in item.filters],
         )
         if kind == "list" and item.domain != "sales":
             values["dimension"] = item.target or "product"

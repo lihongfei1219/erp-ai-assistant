@@ -62,7 +62,7 @@ def _number_needs_words(job, store, previous, key):
     payload = {
         "kind": "semantic_notice", "guided": True, "snapshot_key": key,
         "status": "needs_input", "number_reply_allowed": False,
-        "notice": "这个数字无法唯一对应当前建议。请用文字说明想选的建议，或直接补充要查看的内容。",
+        "notice": "无法确定你选的是哪轮建议，请用文字说明。",
     }
     if previous:
         for field in ("semantic_context", "dialogue_turn", "product_scope_note"):
@@ -77,6 +77,7 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
 
     question = original["question"].strip()
     body = ConversationRequest(question=question)
+    answered_round = None
     if len(question) == 1 and question in "123456789":
         candidate = store.latest_numbered_choice_context(job)
         if not candidate or candidate.get("snapshot_key") != key:
@@ -87,6 +88,7 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
         if index >= len(choices):
             return _number_needs_words(job, store, previous, key)
         conversation = SemanticContext.model_validate(candidate["semantic_context"])
+        answered_round = conversation.dialogue_id
         body = ConversationRequest(choice_id=choices[index].id)
     body = body.model_copy(update={"request_id": "job-" + str(job["job_id"])})
     owner = json.dumps([
@@ -104,6 +106,10 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
         "semantic_context": outcome.context.model_dump(mode="json"),
         "product_scope_note": outcome.context.product_scope_note,
     }
+    if answered_round:
+        # Audit the exact validated round selected; the next decision and its
+        # choices are durable before delivery and survive worker restarts.
+        common["answered_dialogue_id"] = answered_round
     if turn.status != "result":
         payload = {
             **common, "kind": "semantic_notice", "guided": True,

@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from app.analysis.sales_query import QueryUnavailable
 from app.capabilities.registry import (
     DOMAINS,
+    FILTER_FIELDS,
     MAX_DAYS,
     MAX_ITEMS,
     MAX_STEPS,
@@ -94,6 +95,7 @@ def capability_view(report):
             item.update(available_start=start.isoformat(), available_end_exclusive=end.isoformat())
         if executable and domain == "inventory":
             item["snapshot_as_of"] = report.operations.inventory.as_of.isoformat()
+        item["filter_fields"] = list(FILTER_FIELDS[domain]) if item["executable"] else []
         domains[domain] = item
     return {
         "version": registry_version(),

@@ -39,7 +39,12 @@ export function Analytics() {
     path: "run" | "converse";
     body: unknown;
   } | null>(null);
-  const [evidence, setEvidence] = useState<number[] | null>(null);
+  const [evidence, setEvidence] = useState<{
+    ids: number[];
+    step: AnalysisStep;
+    product_code?: string;
+    buyer_code?: string;
+  } | null>(null);
   const [reload, setReload] = useState(0);
   const request = useRef<AbortController | null>(null);
   const questionInput = useRef<HTMLTextAreaElement>(null);
@@ -624,7 +629,22 @@ export function Analytics() {
                               <button
                                 className="analytics-evidence"
                                 onClick={() =>
-                                  setEvidence(row.evidence_ids as number[])
+                                  setEvidence({
+                                    ids: row.evidence_ids as number[],
+                                    step: result.plan.steps[index],
+                                    ...(item.kind === "product_ranking" ||
+                                    (item.kind === "comparison" &&
+                                      result.plan.steps[index].dimension !==
+                                        "buyer")
+                                      ? { product_code: String(row.code) }
+                                      : {}),
+                                    ...(item.kind === "buyer_ranking" ||
+                                    (item.kind === "comparison" &&
+                                      result.plan.steps[index].dimension ===
+                                        "buyer")
+                                      ? { buyer_code: String(row.code) }
+                                      : {}),
+                                  })
                                 }
                               >
                                 查看证据
@@ -688,7 +708,7 @@ export function Analytics() {
         </details>
       )}
       {evidence && (
-        <AnalysisEvidence ids={evidence} onClose={() => setEvidence(null)} />
+        <AnalysisEvidence {...evidence} onClose={() => setEvidence(null)} />
       )}
     </div>
   );
@@ -1039,9 +1059,15 @@ function AnalysisChart({ figure }: { figure: Figure }) {
 
 function AnalysisEvidence({
   ids,
+  step,
+  product_code,
+  buyer_code,
   onClose,
 }: {
   ids: number[];
+  step: AnalysisStep;
+  product_code?: string;
+  buyer_code?: string;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -1055,7 +1081,23 @@ function AnalysisEvidence({
     const controller = new AbortController();
     setOrder(null);
     setError("");
-    api<{ item: Order }>(`/orders/${id}`, controller.signal)
+    const request = step.filters?.length
+      ? fetch("/api/v1/analysis/evidence", {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            step,
+            order_id: id,
+            product_code,
+            buyer_code,
+          }),
+        }).then(async (response) => {
+          if (!response.ok) throw new Error("无法读取匹配的订单明细");
+          return response.json() as Promise<{ item: Order }>;
+        })
+      : api<{ item: Order }>(`/orders/${id}`, controller.signal);
+    request
       .then((data) => {
         if (!controller.signal.aborted) setOrder(data.item);
       })
@@ -1064,11 +1106,11 @@ function AnalysisEvidence({
         setError("无法读取订单依据，请重试。");
       });
     return () => controller.abort();
-  }, [id]);
+  }, [id, step, product_code, buyer_code]);
   return (
     <dialog ref={dialog} className="analytics-dialog" onCancel={onClose}>
       <div className="analytics-actions">
-        <h2>订单依据</h2>
+        <h2>{step.filters?.length ? "订单依据（仅匹配明细）" : "订单依据"}</h2>
         <button aria-label="关闭分析证据" onClick={onClose}>
           <X />
         </button>

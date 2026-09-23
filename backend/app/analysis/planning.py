@@ -87,7 +87,13 @@ def prepare_semantic_input(body, report, today, previous=None):
         today=today,
         timezone=report.operating.policy.business_timezone,
         previous=previous.model_copy(
-            update={"dialogue_choices": [], "dialogue_id": None, "runtime_ref": None}
+            update={
+                "dialogue_choices": [],
+                "dialogue_id": None,
+                "runtime_ref": None,
+                "entity_bindings": [],
+                "entity_issue": None,
+            }
         )
         if previous
         else None,
@@ -106,7 +112,9 @@ async def resolve_question(
     start, end = available_dates(report)
     if hasattr(planner, "interpret"):
         request = prepare_semantic_input(body, report, today, conversation)
-        previous = request.previous
+        previous = (
+            conversation if request.previous is not None and conversation else request.previous
+        )
         semantic = await planner.interpret(request)
         compiled = compile_request(
             semantic,
@@ -133,15 +141,20 @@ def finish_compilation(compiled, body, report) -> PlanningResult:
                 message="当前快照只包含授权企业，不能提供全平台分析。",
             ),
         )
+    from app.semantic.entities import bind_entities
+
+    compiled = bind_entities(compiled, report)
     if compiled.plan is None:
         view = capability_view(report)
         blocked = [
-            view["domains"][i.domain] for i in compiled.context.intents
+            view["domains"][i.domain]
+            for i in compiled.context.intents
             if i.domain in view["domains"] and not view["domains"][i.domain]["executable"]
         ]
         if blocked:
             compiled = Compilation(
-                compiled.status, compiled.context,
+                compiled.status,
+                compiled.context,
                 message="\n".join(dict.fromkeys(unavailable_message(entry) for entry in blocked)),
             )
         return PlanningResult(None, [], compiled)

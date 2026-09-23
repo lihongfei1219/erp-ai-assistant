@@ -122,6 +122,9 @@ class SemanticContext(StrictModel):
     # A rejected target patch is context for the next model turn, never an execution plan.
     pending_request: SemanticRequest | None = None
     runtime_ref: GraphReference | None = None
+    # Server bindings are stripped from cloud inputs and bound to the signed snapshot context.
+    entity_bindings: list[dict] = Field(default_factory=list, max_length=60)
+    entity_issue: dict | None = None
 
 
 class SemanticInput(StrictModel):

@@ -7,13 +7,25 @@ from uuid import uuid4
 from starlette.concurrency import run_in_threadpool
 
 from app.analysis.analytics import available_dates, execute_analysis
+from app.analysis.object_filters import (
+    binding_key,
+    binding_matches,
+    entity_directory,
+    resolve_entity,
+)
 from app.analysis.operations import (
     domain_dates,
     executable_domains,
 )
 from app.analysis.planning import finish_compilation, resolve_question
 from app.analysis.sales_query import QueryUnavailable
-from app.capabilities.registry import MAX_DAYS, TARGETS, semantic_metrics, target_supported
+from app.capabilities.registry import (
+    FILTER_FIELDS,
+    MAX_DAYS,
+    TARGETS,
+    semantic_metrics,
+    target_supported,
+)
 from app.capabilities.registry import (
     METRICS as DOMAIN_METRICS,
 )
@@ -107,8 +119,10 @@ def _target_label(target):
 
 
 def _metric_label(item, metric):
-    if item.domain in {"returns", "shipping"} and metric in {"amount", "orders"}:
-        return DOMAINS[item.domain] + ("单据金额" if metric == "amount" else "单据数")
+    if item.domain in {"returns", "shipping"} and metric in {"amount", "orders", "quantity"}:
+        return DOMAINS[item.domain] + {
+            "amount": "单据金额", "orders": "单据数", "quantity": "商品数量",
+        }[metric]
     return METRICS.get(metric, "指标待明确")
 
 
@@ -135,6 +149,12 @@ def _draft(context):
             }
             for f in item.filters
         ]
+        for condition, constraint in zip(item.filters, constraints, strict=True):
+            bound = next(
+                (b for b in context.entity_bindings if binding_matches(b, item, condition)), None
+            )
+            if bound:
+                constraint["label"] += f"（已确认编码：{bound['code']}）"
         sources = context.field_sources.get(item.id, {})
         items.append(
             DraftIntent(
@@ -361,14 +381,43 @@ def _build_guidance(resolution, report, today):
                     f"改看{label}排行（保留日期与指标）",
                     [_set(item.id, "target", target), _set(item.id, "operation", "ranking")],
                 )
-    elif any(i.filters for i in context.intents):
-        item = next(i for i in context.intents if i.filters)
+    elif context.entity_issue:
+        issue = context.entity_issue
+        item = next(i for i in context.intents if i.id == issue["intent_id"])
+        constraint = next(f for f in item.filters if f.id == issue["constraint_id"])
+        field, kind = "filters", issue["kind"]
+        directory = entity_directory(report, item.domain, constraint.field)
+        _, matches = resolve_entity(directory, constraint.value)
+        if matches:
+            question = (
+                f"“{constraint.value}”需要确认具体{FILTERS[constraint.field]}，"
+                f"找到 {len(matches)} 个候选。请选择，或直接提供完整名称／编码。"
+                + (" 下方仅显示前3项，可补充更具体的名称缩小范围。" if len(matches) > 3 else "")
+            )
+            for code in matches[:3]:
+                offer(f"{sorted(directory[code])[0]}（编码：{code}）", action="entity")
+                candidates[-1]["binding"] = {**binding_key(item, constraint), "code": code}
+        else:
+            question = (
+                f"当前授权的{DOMAINS[item.domain]}数据中未找到{FILTERS[constraint.field]}"
+                f"“{constraint.value}”。请核对完整名称或编码；未找到不代表业务结果为零。"
+            )
+    elif any(
+        f.field not in FILTER_FIELDS.get(i.domain, ()) for i in context.intents for f in i.filters
+    ):
+        item = next(
+            i
+            for i in context.intents
+            if any(f.field not in FILTER_FIELDS.get(i.domain, ()) for f in i.filters)
+        )
         field, kind = "filters", "capability_gap"
         question = (
-            "已保留你的筛选条件，但当前执行器尚未支持对象筛选。"
+            "已保留你的筛选条件；当前支持商品和客户筛选，库存仅支持商品，其他筛选尚未接入。"
             "是否移除某个条件后继续？其余条件会保留。"
         )
-        for constraint in item.filters[:3]:
+        for constraint in [f for f in item.filters if f.field not in FILTER_FIELDS[item.domain]][
+            :3
+        ]:
             offer(
                 f"移除{FILTERS[constraint.field]}条件：{constraint.value}",
                 [
@@ -513,7 +562,8 @@ def _build_guidance(resolution, report, today):
                     or (item.operation in {"comparison", "anomalies"} and value != "amount")
                 ):
                     continue
-                values(field, [(value, permitted[value])])
+                label = _metric_label(item, value) if field == "metric" else permitted[value]
+                values(field, [(value, label)])
         else:
             field = pending
         only_date_picker = len(candidates) == 1 and candidates[0]["kind"] == "date_range"
@@ -547,8 +597,7 @@ def _build_guidance(resolution, report, today):
                         (
                             i
                             for i in context.intents
-                            if i.operation
-                            not in DOMAIN_OPERATIONS.get(i.domain, ())
+                            if i.operation not in DOMAIN_OPERATIONS.get(i.domain, ())
                         ),
                         item,
                     )
@@ -628,7 +677,13 @@ def _build_guidance(resolution, report, today):
             and issue.kind != "dependency"
         ]
     key = f"{item.id}:{field}:{kind}"
-    return item.id, field, kind, question, issue_id, key, candidates[:3]
+    # A web date picker is not a semantic alternative and is hidden on Feishu.
+    # Do not let it consume one of the three candidate slots (or omit inventory
+    # when all four domains are offered).
+    limit = 4 if field == "domain" else 3
+    pickers = [c for c in candidates if c["kind"] == "date_range"][:1]
+    alternatives = [c for c in candidates if c["kind"] != "date_range"][:limit]
+    return item.id, field, kind, question, issue_id, key, pickers + alternatives
 
 
 def _apply_choice(body, previous, today, *, domains=("sales",)):
@@ -645,6 +700,33 @@ def _apply_choice(body, previous, today, *, domains=("sales",)):
             request, question="", today=today, trusted_dates=True, domains=domains
         )
     edits = choice["edits"]
+    if choice["kind"] == "entity":
+        binding = choice["binding"]
+        intent = next((i for i in previous.intents if i.id == binding["intent_id"]), None)
+        condition = (
+            next((f for f in intent.filters if binding_matches(binding, intent, f)), None)
+            if intent
+            else None
+        )
+        if condition is None:
+            raise DialogueChoiceUnavailable("对象条件已修改，请使用当前建议重新选择。")
+        previous = previous.model_copy(
+            update={
+                "entity_bindings": [
+                    b for b in previous.entity_bindings if not binding_matches(b, intent, condition)
+                ]
+                + [binding],
+                "entity_issue": None,
+            }
+        )
+        edits = [
+            {
+                "intent_id": intent.id,
+                "operation": "replace_filter",
+                "constraint_id": condition.id,
+                "filter": condition.model_dump(),
+            }
+        ]
     if choice["kind"] == "date_range":
         if body.date_range is None:
             raise DialogueChoiceUnavailable("请选择起止日期后继续。")

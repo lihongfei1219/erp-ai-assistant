@@ -21,10 +21,10 @@ class JobStoreError(ValueError):
 
 
 def numbered_choice_context(rows: list[dict], arrived_at) -> dict | None:
-    """Accept a bare number only when it has exactly one recently displayed meaning.
+    """Bind numbers to the latest delivered question, as stated on each new card.
 
     Rows are newest-first and already isolated by application, tenant, chat and user.
-    Unknown delivery can have displayed a card, so it contributes to ambiguity too.
+    A newer unfinished/uncertain task blocks selection; older cards are superseded.
     """
     cutoff = arrived_at - timedelta(minutes=30)
     history = []
@@ -48,13 +48,7 @@ def numbered_choice_context(rows: list[dict], arrived_at) -> dict | None:
         or not payload.get("dialogue_turn", {}).get("choices")
     ):
         return None
-    rounds = {
-        row["payload"].get("semantic_context", {}).get("dialogue_id")
-        for row in history
-        if row["payload"].get("dialogue_turn", {}).get("choices")
-        and row["status"] in {"sent", "unknown", "sending"}
-    }
-    return payload if len(rounds) == 1 and None not in rounds else None
+    return payload if payload.get("semantic_context", {}).get("dialogue_id") else None
 
 
 class SqlJobStore:
@@ -112,7 +106,7 @@ class SqlJobStore:
         return None
 
     def latest_numbered_choice_context(self, job: dict) -> dict | None:
-        """Do not silently apply an old card's number to a newer pending question."""
+        """Resolve the latest question within the same identity and arrival window."""
         with self.connection() as connection:
             rows = connection.execute(
                 "SELECT TOP (101) payload_json,status,created_at,updated_at,result_json "
@@ -131,8 +125,6 @@ class SqlJobStore:
                 job["created_at"],
                 job["created_at"],
             ).fetchall()
-        if len(rows) > 100:
-            return None
         history = [
             {
                 "payload": json.loads(row[0]),

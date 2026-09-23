@@ -25,6 +25,73 @@ async function enter(page: Page) {
   );
 }
 
+test("object choice executes filtered plan and evidence keeps matching scope", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/analysis/catalog", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      json: { ...(await response.json()), model_enabled: true },
+    });
+  });
+  const step = {
+    kind: "summary",
+    start_date: "2026-09-01",
+    end_date_exclusive: "2026-09-16",
+    filters: [{ field: "product", operator: "include", code: "SKU-1" }],
+  };
+  let calls = 0;
+  await page.route("**/api/v1/analysis/converse", async (route) => {
+    calls += 1;
+    if (calls === 1) {
+      await route.fulfill({
+        json: turn(null, {
+          status: "needs_input",
+          understood_summary: "查询指定商品的销售金额",
+          clarification: {
+            id: "entity",
+            intent_id: "goal",
+            field: "filters",
+            kind: "entity_ambiguous",
+            question: "请选择具体商品",
+          },
+          choices: [
+            {
+              id: "entity-one",
+              label: "示例商品（编码：SKU-1）",
+              action: { kind: "entity", intent_id: "goal", field: "filters" },
+            },
+          ],
+        }),
+      });
+      return;
+    }
+    expect(route.request().postDataJSON().choice_id).toBe("entity-one");
+    const response = await page.request.post("/api/v1/analysis/run", {
+      data: { steps: [step] },
+    });
+    expect(response.ok()).toBeTruthy();
+    await route.fulfill({ json: turn(await response.json()) });
+  });
+  await enter(page);
+  await page
+    .getByLabel("分析问题", { exact: true })
+    .fill("查询指定商品的销售金额");
+  await page.getByRole("button", { name: "开始智能分析" }).click();
+  await page.getByRole("button", { name: "示例商品（编码：SKU-1）" }).click();
+  const evidenceRequest = page.waitForRequest("**/api/v1/analysis/evidence");
+  await page
+    .getByTestId("analysis-results")
+    .getByRole("button", { name: "查看证据" })
+    .click();
+  expect((await evidenceRequest).postDataJSON().step.filters).toEqual(
+    step.filters,
+  );
+  await expect(page.getByRole("dialog")).toContainText("仅匹配明细");
+  await expect(page.getByRole("dialog")).toContainText("示例商品 2");
+  await expect(page.getByRole("dialog")).not.toContainText("示例商品 1");
+});
+
 test("manual analysis renders exact values, local Plotly chart and evidence", async ({
   page,
 }) => {

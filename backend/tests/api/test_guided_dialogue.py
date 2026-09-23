@@ -227,11 +227,12 @@ def test_filter_removal_only_removes_selected_condition(extract, window, scope, 
     client = setup(extract, window, scope, source_as_of, provider)
     first = post(client, question="9月1号合成地区的合成药品卖得如何")
     assert len(first["draft"]["intents"][0]["constraints"]) == 2
-    choice = next(c for c in first["choices"] if "合成药品" in c["label"])
+    choice = next(c for c in first["choices"] if "合成地区" in c["label"])
     second = post(client, choice_id=choice["id"], conversation_token=first["conversation_token"])
-    assert second["status"] == "capability_gap" and second["result"] is None
+    assert second["status"] == "needs_input" and second["result"] is None
+    assert second["clarification"]["kind"] == "entity_not_found"
     remaining = second["draft"]["intents"][0]["constraints"]
-    assert len(remaining) == 1 and "合成地区" in remaining[0]["label"]
+    assert len(remaining) == 1 and "合成药品" in remaining[0]["label"]
     assert len(provider.requests) == 1
 
 
@@ -326,6 +327,32 @@ def test_model_suggestion_values_are_validated_and_issue_resolves_by_id(
     )
     assert done["status"] == "result"
     assert done["draft"]["intents"][0]["fields"]["target"] == "product"
+
+
+def test_date_picker_does_not_displace_three_valid_model_alternatives(
+    extract, window, scope, source_as_of,
+):
+    provider = Provider({
+        "intents": [{"id": "one", "domain": "sales", "operation": "summary"}],
+        "issues": [{
+            "intent_id": "one", "field": "time", "question": "你想查哪段时间？",
+            "choices": [
+                {"label": "第一天", "value": "2026-09-01"},
+                {"label": "第二天", "value": "2026-09-02"},
+                {"label": "两天合计", "value": "2026-09-01至2026-09-02"},
+            ],
+        }],
+    })
+    client = setup(extract, window, scope, source_as_of, provider)
+    first = post(client, question="看这两天的销售，时间待确认")
+    choices = first["choices"]
+    assert len([c for c in choices if c["action"]["kind"] == "date_range"]) == 1
+    alternatives = [c for c in choices if c["action"]["kind"] != "date_range"]
+    assert len(alternatives) == 3
+    done = post(
+        client, choice_id=alternatives[-1]["id"], conversation_token=first["conversation_token"]
+    )
+    assert done["status"] == "result" and len(provider.requests) == 1
 
 
 def test_prior_choice_cannot_be_applied_to_new_turn(extract, window, scope, source_as_of):

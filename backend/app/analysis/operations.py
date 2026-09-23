@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
+from app.analysis.object_filters import matches
 from app.analysis.sales_query import QueryUnavailable
 from app.capabilities.registry import DOMAIN_LABELS
 from app.capabilities.registry import METRICS as METRICS
@@ -178,6 +179,7 @@ def execute_operation(report, step):
                 batch_code=r.batch_code,
             )
             for r in facts.records
+            if matches(step.filters, "product", r.product_code)
         ]
         totals = dict(
             product_count=len({r["code"] for r in records}),
@@ -213,10 +215,12 @@ def execute_operation(report, step):
             )
             for doc in documents
             for line in doc.lines
+            if matches(step.filters, "buyer", doc.buyer_code)
+            and matches(step.filters, "product", line.product_code)
         ]
         totals = dict(
-            amount=_number(sum((doc.amount for doc in documents), ZERO)),
-            document_count=len(documents),
+            amount=_number(sum((row["amount"] for row in records), ZERO)),
+            document_count=len({row["document_id"] for row in records}),
             product_count=len({r["code"] for r in records}),
         )
         notes.append("纳入状态：" + "、".join(facts.included_statuses) + "。")
@@ -229,7 +233,9 @@ def execute_operation(report, step):
             if step.domain == "returns"
             else "只统计已确认的销售出库；采购退出未计入，单据数不是商品件数。"
         )
-        findings = [f"所选期间{label}单据 {len(documents)} 张，单据金额 {totals['amount']}。"]
+        findings = [
+            f"所选期间{label}单据 {totals['document_count']} 张，匹配金额 {totals['amount']}。"
+        ]
     totals["unit_count"] = len({r["unit"] for r in records})
     columns = {
         "unit": "单位",

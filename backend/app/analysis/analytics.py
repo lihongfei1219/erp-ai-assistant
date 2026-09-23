@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from app.analysis.charts import build_chart
+from app.analysis.object_filters import filter_notes, filtered_orders, validate_filters
 from app.analysis.sales_query import QueryUnavailable, _local_date
 from app.capabilities.registry import SALES_METRIC_DEFINITIONS, SALES_TITLES
 from app.capabilities.view import capability_view, date_bounds, unavailable_message
@@ -32,6 +33,7 @@ def validate_plan(report: SalesReport, plan: AnalysisPlan):
         capability = view["domains"][step.domain]
         if not capability["executable"]:
             raise QueryUnavailable(unavailable_message(capability))
+        validate_filters(report, step)
         if step.domain != "sales":
             validate_operation_step(report, step)
             continue
@@ -90,10 +92,10 @@ def _evidence(ids) -> dict:
     return {"evidence_ids": ordered[:100], "evidence_count": len(ordered)}
 
 
-def _frames(report: SalesReport):
+def _frames(report: SalesReport, evidence=None):
     tz = ZoneInfo(report.operating.policy.business_timezone)
     orders, lines = [], []
-    for order in report.evidence:
+    for order in report.evidence if evidence is None else evidence:
         if order.status not in report.operating.policy.included_statuses:
             continue
         day = _local_date(order.created_at, tz)
@@ -337,13 +339,25 @@ def execute_analysis(report: SalesReport, plan: AnalysisPlan) -> AnalysisRespons
     policy = report.operating.policy
     results = []
     for step in plan.steps:
+        selected_orders, selected_lines = (
+            _frames(report, filtered_orders(report, step))
+            if step.domain == "sales" and step.filters
+            else (orders, lines)
+            if step.domain == "sales"
+            else (None, None)
+        )
         result = (
-            _execute(orders, lines, step)
+            _execute(selected_orders, selected_lines, step)
             if step.domain == "sales"
             else execute_operation(report, step)
         )
         results.append(
-            result.model_copy(update={"chart": build_chart(result, step, policy.currency)})
+            result.model_copy(
+                update={
+                    "chart": build_chart(result, step, policy.currency),
+                    "notes": result.notes + filter_notes(step),
+                }
+            )
         )
     return AnalysisResponse(
         run_id=uuid4().hex,
@@ -364,3 +378,34 @@ def execute_analysis(report: SalesReport, plan: AnalysisPlan) -> AnalysisRespons
         results=results,
         warnings=report.metadata.warnings,
     )
+
+
+def analysis_evidence(report, body):
+    step = body.step
+    if step.domain != "sales":
+        raise QueryUnavailable("此证据接口只支持销售订单。")
+    validate_plan(report, AnalysisPlan(steps=[step]))
+    _validate_evidence(report)
+    tz = ZoneInfo(report.operating.policy.business_timezone)
+    for order in filtered_orders(report, step):
+        if order.order_id != body.order_id:
+            continue
+        day = _local_date(order.created_at, tz)
+        in_period = step.start_date <= day < step.end_date_exclusive
+        if step.kind == "comparison":
+            in_period |= step.comparison_start_date <= day < step.comparison_end_date_exclusive
+        if not in_period or body.buyer_code and body.buyer_code != order.buyer_code:
+            break
+        lines = [
+            line
+            for line in order.lines
+            if body.product_code is None or line.product_code == body.product_code
+        ]
+        if lines:
+            return order.model_copy(
+                update={
+                    "lines": lines,
+                    "amount": sum((line.amount for line in lines), ZERO),
+                }
+            )
+    raise QueryUnavailable("该订单不属于本次筛选和日期范围。")

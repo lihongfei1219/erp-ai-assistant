@@ -11,17 +11,21 @@
 已有本机环境：
 
 ```powershell
-uv run python scripts/start_backend.py --port 8001
+uv run python start.py
 ```
 
-打开`http://127.0.0.1:8001`即可进入工作台，无需本地令牌或登录；启动脚本不再生成访问令牌。启动前先确认端口；脚本默认端口为8000。服务仅监听本机。优先加载`.local/reports/platform-four-domain-20260922.json`，不存在则回退原销售快照。可用`--report-path`指定另一份已对账快照。
+根目录`start.py`在同一终端管理网页和飞书两个子进程，默认网页端口8001。打开`http://127.0.0.1:8001`即可进入工作台；等待飞书日志显示长连接建立后即可在授权群@机器人。按一次`Ctrl+C`一起停止两个服务，最多等待30秒退出；任一服务进程退出时会关闭另一个并返回失败，不自动重启。仅管理本次创建的子进程，不停止其他实例或重置任务。
+
+可先执行`uv run python start.py --check`进行离线检查；检查快照、前端构建、飞书授权配置、端口和已有机器人锁，不连接数据库、模型或飞书。正式启动仍需助手数据库和网络可用。`--port`可更换网页端口，`--report-path`给两个服务指定同一份快照，`--config`指定飞书配置。默认优先四域快照，其次经营／销售快照；统一入口要求具备有效销售规则和全平台授权。
+
+网页仅监听本机，无需本地令牌或登录。若只需网页，原命令`uv run python scripts/start_backend.py --port 8001`仍保留；该单服务脚本默认端口仍为8000。
 
 Python统一由uv项目管理，在项目根目录执行：
 
 ```powershell
 uv sync --locked
 uv run python scripts/check_environment.py
-uv run python scripts/start_backend.py --port 8001
+uv run python start.py
 ```
 
 `pyproject.toml`声明依赖，`uv.lock`锁定直接及间接依赖，`.python-version`选择Python 3.11；虚拟环境仍为根目录`.venv`，不需要手动激活。新增运行依赖使用`uv add 包名`，开发依赖使用`uv add --dev 包名`，移除使用`uv remove 包名`。已精确固定版本的直接依赖用`uv add "包名==新版本"`更新；在声明允许的范围内更新锁定版本可用`uv lock --upgrade-package 包名`，然后执行`uv sync --locked`。依赖声明和锁文件一起提交；不再维护`backend/requirements.lock`。这些命令采用[uv项目管理流程](https://docs.astral.sh/uv/concepts/projects/sync/)。
@@ -30,7 +34,7 @@ uv run python scripts/start_backend.py --port 8001
 
 FastAPI同源提供`frontend/dist`；分别开发时在`frontend/`执行`npm run dev`，Vite默认代理至8000后端。SQL只读取数需要本机SQL Server实例和ODBC Driver 18；现有快照上的网页分析无需重新取数。
 
-网页和飞书机器人是独立进程，`start_backend.py`只启动网页/API。飞书还需要本地`.local/feishu-app.json`中的应用凭据、租户及群／用户授权，以及助手库；这些私有配置不会随代码或uv依赖安装恢复。先检查，再在另一个终端启动机器人：
+网页和飞书机器人仍是独立进程，由`start.py`统一启动和停止。飞书需要本地`.local/feishu-app.json`中的应用凭据、租户及群授权，以及助手库；这些私有配置不会随代码或uv依赖安装恢复。若只需飞书，可单独检查并启动：
 
 ```powershell
 uv run python scripts/start_feishu_bot.py --check

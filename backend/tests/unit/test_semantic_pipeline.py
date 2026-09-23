@@ -462,7 +462,7 @@ def test_polite_colloquial_phrases_do_not_look_like_entity_filters(question):
     assert result.plan is not None
 
 
-def test_structured_descending_is_supported_and_named_product_filter_blocks_execution():
+def test_structured_descending_preserves_named_filter_for_local_binding():
     intent = dict(
         domain="sales",
         operation="ranking",
@@ -474,7 +474,8 @@ def test_structured_descending_is_supported_and_named_product_filter_blocks_exec
     assert compiler()([intent], "9月15号商品按销售额倒序排名").plan is not None
     intent["filters"] = [dict(field="product", operator="include", value="阿莫西林")]
     filtered = compiler()([intent], "9月15号阿莫西林销售额")
-    assert filtered.plan is None and filtered.status == "unsupported"
+    assert filtered.plan is not None and filtered.status == "ready"
+    assert filtered.plan.steps[0].filters[0].code == "阿莫西林"
     assert filtered.context.intents[0].filters[0].value == "阿莫西林"
 
 
@@ -538,7 +539,8 @@ def test_structured_named_filter_is_preserved_when_date_is_completed():
         "阿莫西林卖了多少钱",
     )
     result = run([dict(time="9月15号")], "9月15号", previous=pending.context, mode="answer")
-    assert result.plan is None and result.context.intents[0].filters[0].value == "阿莫西林"
+    assert result.plan is not None and result.context.intents[0].filters[0].value == "阿莫西林"
+    assert result.plan.steps[0].filters[0].code == "阿莫西林"
 
 
 def test_narrowing_combined_followup_keeps_filters():

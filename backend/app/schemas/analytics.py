@@ -21,6 +21,12 @@ AnalysisKind = Literal[
 BusinessDomain = Literal["sales", "returns", "shipping", "inventory"]
 
 
+class ObjectFilter(StrictModel):
+    field: Literal["product", "buyer"]
+    operator: Literal["include", "exclude", "equal"] = "equal"
+    code: str = Field(min_length=1, max_length=200, pattern=r"\S")
+
+
 class AnalysisStep(StrictModel):
     domain: BusinessDomain = "sales"
     kind: AnalysisKind
@@ -32,6 +38,7 @@ class AnalysisStep(StrictModel):
     dimension: Literal["product", "buyer"] = "product"
     comparison_start_date: date | None = None
     comparison_end_date_exclusive: date | None = None
+    filters: list[ObjectFilter] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def check_intervals(self):
@@ -40,6 +47,13 @@ class AnalysisStep(StrictModel):
 
 class AnalysisPlan(StrictModel):
     steps: list[AnalysisStep] = Field(min_length=1, max_length=MAX_STEPS)
+
+
+class AnalysisEvidenceRequest(StrictModel):
+    step: AnalysisStep
+    order_id: int = Field(strict=True)
+    product_code: str | None = Field(default=None, max_length=200)
+    buyer_code: str | None = Field(default=None, max_length=200)
 
 
 class AnalysisQuestion(StrictModel):

@@ -9,7 +9,15 @@ MAX_DAYS = 90
 MAX_STEPS = 6
 MAX_ITEMS = 50
 DEFAULT_ITEMS = 10
-OBJECT_FILTERS = False
+OBJECT_FILTERS = True
+FILTER_FIELDS = MappingProxyType(
+    {
+        "sales": ("product", "buyer"),
+        "returns": ("product", "buyer"),
+        "shipping": ("product", "buyer"),
+        "inventory": ("product",),
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -212,6 +220,7 @@ def registry_version():
         "capabilities": [asdict(c) for c in REGISTRY.values()],
         "limits": [MAX_DAYS, MAX_STEPS, MAX_ITEMS, DEFAULT_ITEMS],
         "object_filters": OBJECT_FILTERS,
+        "filter_fields": dict(FILTER_FIELDS),
     }
     digest = hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
     return "erp.capabilities.v1." + digest
@@ -225,6 +234,8 @@ def validate_step(step):
     cap = REGISTRY.get((step.domain, step.kind))
     if cap is None:
         raise ValueError("该业务不支持此分析方式")
+    if any(f.field not in FILTER_FIELDS[step.domain] for f in step.filters):
+        raise ValueError("该业务不支持此对象筛选，库存不支持客户筛选")
     if step.metric not in cap.metrics:
         raise ValueError("该分析不支持此指标")
     if step.domain == "inventory" and days != 1:

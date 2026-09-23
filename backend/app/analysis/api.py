@@ -7,14 +7,25 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from app.analysis.analytics import METRICS, TITLES, available_dates, execute_analysis
+from app.analysis.analytics import (
+    METRICS,
+    TITLES,
+    analysis_evidence,
+    available_dates,
+    execute_analysis,
+)
 from app.analysis.dialogue import DialogueChoiceUnavailable
 from app.analysis.dialogue import converse as resolve_dialogue
 from app.analysis.planning import resolve_question
 from app.analysis.sales_query import QueryUnavailable
 from app.capabilities.view import capability_view
 from app.orchestration.store import GraphConflict
-from app.schemas.analytics import AnalysisPlan, AnalysisQuestion, AnalysisResponse
+from app.schemas.analytics import (
+    AnalysisEvidenceRequest,
+    AnalysisPlan,
+    AnalysisQuestion,
+    AnalysisResponse,
+)
 from app.schemas.sales import SalesReport
 from app.semantic.context import decode_context, encode_context
 from app.semantic.dialogue_schemas import ConversationRequest, DialogueTurn
@@ -95,6 +106,13 @@ def register_analysis_routes(router, get_report, planner=None, *, context_secret
     def run(plan: AnalysisPlan, report: Report):
         try:
             return execute_analysis(report, plan)
+        except QueryUnavailable as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @router.post("/analysis/evidence")
+    def evidence(body: AnalysisEvidenceRequest, report: Report):
+        try:
+            return {"item": analysis_evidence(report, body)}
         except QueryUnavailable as exc:
             raise HTTPException(422, str(exc)) from None
 

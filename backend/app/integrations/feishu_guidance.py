@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from app.analysis.analytics import available_dates
 from app.analysis.operations import DOMAIN_LABELS, domain_dates, executable_domains
-from app.integrations.feishu_cards import _text, information_card
+from app.integrations.feishu_display_components import panel, text
 from app.semantic.dialogue_schemas import DialogueTurn
 
 
@@ -19,24 +19,25 @@ def render_guidance(payload):
         DialogueTurn.model_validate(payload["dialogue_turn"])
         if payload.get("dialogue_turn") else None
     )
-    title = {
-        "needs_input": "再补充一点，就能继续",
-        "capability_gap": "这部分暂时做不到，一起调整需求",
-        "data_gap": "所需数据暂未覆盖，请确认范围",
-    }.get(payload["status"], "继续完善分析")
-    sections = []
+    title = "确认一下你的想法"
+    sections, details = [], []
     if payload.get("notice"):
         title = "请用文字说明你的选择"
         sections.append(payload["notice"])
     if turn is not None:
         if turn.understood_summary:
-            sections.append("已理解的需求\n" + turn.understood_summary)
+            details.append("已理解的需求\n" + turn.understood_summary)
         if turn.applied_defaults:
-            sections.append("当前采用的默认条件（可以修改）\n" + "；".join(turn.applied_defaults))
-        if turn.repeated_clarification:
-            sections.append("前面已明确的条件仍然保留，不用重写整个问题；只需说明本轮要补充或改动的部分。")
+            details.append("默认条件（可以修改）\n" + "；".join(turn.applied_defaults))
         if turn.clarification is not None:
-            sections.append("本轮需要确认\n" + turn.clarification.question)
+            question = turn.clarification.question
+            details.append("待确认事项\n" + question)
+            if len(question) > 100 and numbered_choices(turn):
+                question = {
+                    "capability_gap": "当前条件暂不支持，要调整为下面哪一种？",
+                    "data_gap": "所需日期没有完整数据，要改查哪个时间？",
+                }.get(turn.status, "下面哪一种更接近你的想法？")
+            sections.append(question)
             if turn.clarification.field in {"time", "comparison_time"}:
                 selected = next(
                     (
@@ -48,21 +49,23 @@ def render_guidance(payload):
                 start = turn.available_dates.start
                 end = turn.available_dates.end_exclusive - timedelta(days=1)
                 if selected and selected.fields.get("domain") == "inventory":
-                    sections.append(
-                        f"可用库存快照日期：{start}。仅代表备份时点，不是实时或当日日末库存。"
-                        "\n你可以说明是否接受查询这个备份时点；不会自动替换你原来要求的日期。"
-                    )
+                    sections[-1] = "目前只有备份库存，要查看这份快照吗？"
+                    sections.append(f"可用库存快照日期：{start}，不是实时或当日日末库存。")
                 else:
-                    label = selected.label if selected else "本轮目标"
                     date_hint = (
                         f"{start} 至 {end}" if end >= start else "暂无完整日期"
                     )
-                    sections.append(
-                        f"{label}可用完整日期：{date_hint}。"
-                        "\n可以直接说某一天或起止日期。"
-                    )
+                    if turn.clarification.kind in {"missing", "data_gap"}:
+                        sections[-1] = (
+                            "所需日期没有完整数据，要改查哪个时间？"
+                            if turn.status == "data_gap"
+                            else "你想和哪段时间比较？"
+                            if turn.clarification.field == "comparison_time"
+                            else "你想查哪段时间？"
+                        )
+                    sections.append(f"可用完整日期：{date_hint}。")
                     if selected and selected.fields.get("operation") == "comparison":
-                        sections[-1] += "比较分析需要等长且不重叠的两段日期。"
+                        sections[-1] += "比较期需等长且不重叠。"
         choices = numbered_choices(turn)
         if choices:
             numbered = payload.get("number_reply_allowed", True)
@@ -70,21 +73,20 @@ def render_guidance(payload):
                 (f"{index}. " if numbered else "• ") + choice.label
                 for index, choice in enumerate(choices, 1)
             ]
-            sections.append("也可以选择以下建议\n" + "\n".join(suggestions))
-    reply = (
-        "在本群再次 @我，用自己的话补充或修改即可，不必照抄建议。"
-        "如果我的理解不对，直接指出要修改的地方。"
-    )
+            sections.append("\n".join(suggestions))
+    reply = "再次 @我，用文字补充即可。"
     if turn and numbered_choices(turn) and payload.get("number_reply_allowed", True):
-        reply += "\n只有一轮待答建议时，也可 @我 回复编号；多轮建议请用文字说明选择。"
-    reply += "\n上下文保留30分钟；想开始新话题，可 @我 发送“重新开始”。"
-    sections.append("如何继续\n" + reply)
-    card = information_card(title, "")
-    card["elements"] = []
-    for index, section in enumerate(sections):
-        if index:
-            card["elements"].append({"tag": "hr"})
-        card["elements"].append(_text(section))
+        reply = "再次 @我 回复编号，以最新一张提问卡片为准；都不是，也可以直接用文字说明。"
+    sections.append(reply)
+    details.append("已明确的条件会保留，不用重写整个问题。上下文保留30分钟；发送“重新开始”开启新话题。")
+    elements = [text(section) for section in sections]
+    elements.append(panel("查看已保留的条件与说明", "\n\n".join(details)))
+    card = {
+        "schema": "2.0",
+        "config": {"width_mode": "fill", "summary": {"content": title}},
+        "header": {"template": "blue", "title": {"tag": "plain_text", "content": title}},
+        "body": {"padding": "12px", "vertical_spacing": "8px", "elements": elements},
+    }
     return {"semantic_status": payload["status"], "reply_card": card}, "\n\n".join(sections)
 
 
