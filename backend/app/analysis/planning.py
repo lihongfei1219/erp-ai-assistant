@@ -7,9 +7,9 @@ from datetime import date, timedelta
 from app.ai.analytics_bounds import validate_question_plan
 from app.ai.analytics_language import compact_question
 from app.analysis.analytics import TITLES, available_dates, validate_plan
-from app.analysis.operations import DOMAIN_LABELS, TARGETS, domain_dates, executable_domains
-from app.analysis.operations import METRICS as DOMAIN_METRICS
+from app.analysis.operations import DOMAIN_LABELS, executable_domains
 from app.analysis.sales_query import QueryUnavailable
+from app.capabilities.view import capability_view, model_capabilities, unavailable_message
 from app.schemas.analytics import AnalysisPlan, AnalysisQuestion
 from app.schemas.sales import SalesReport
 from app.semantic.catalog import load_catalog
@@ -77,7 +77,7 @@ def describe_interpretation(
 
 
 def prepare_semantic_input(body, report, today, previous=None):
-    start, end = available_dates(report)
+    available_dates(report)
     if previous and previous.catalog_version != load_catalog()["version"]:
         previous = None
     if previous is None and body.previous_plan is not None:
@@ -91,31 +91,7 @@ def prepare_semantic_input(body, report, today, previous=None):
         )
         if previous
         else None,
-        capabilities={
-            "available_start": start.isoformat(),
-            "available_end_exclusive": end.isoformat(),
-            "all_buyers_authorized": report.metadata.scope.all_buyers,
-            "executable_domains": executable_domains(report),
-            "domain_capabilities": {
-                domain: {
-                    "metrics": sorted(DOMAIN_METRICS[domain]),
-                    "targets": sorted(TARGETS[domain]),
-                    "available_start": domain_dates(report, domain)[0].isoformat(),
-                    "available_end_exclusive": domain_dates(report, domain)[1].isoformat(),
-                    **(
-                        {"snapshot_as_of": report.operations.inventory.as_of.isoformat()}
-                        if domain == "inventory"
-                        else {}
-                    ),
-                }
-                for domain in executable_domains(report)
-                if domain != "sales"
-            },
-            "metrics": ["amount", "orders"],
-            "executable_targets": ["product", "buyer"],
-            "analyses": list(TITLES),
-            "object_filters": False,
-        },
+        capabilities=model_capabilities(report),
     )
 
 
@@ -158,6 +134,16 @@ def finish_compilation(compiled, body, report) -> PlanningResult:
             ),
         )
     if compiled.plan is None:
+        view = capability_view(report)
+        blocked = [
+            view["domains"][i.domain] for i in compiled.context.intents
+            if i.domain in view["domains"] and not view["domains"][i.domain]["executable"]
+        ]
+        if blocked:
+            compiled = Compilation(
+                compiled.status, compiled.context,
+                message="\n".join(dict.fromkeys(unavailable_message(entry) for entry in blocked)),
+            )
         return PlanningResult(None, [], compiled)
     try:
         validate_plan(report, compiled.plan)

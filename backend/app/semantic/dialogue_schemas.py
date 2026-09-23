@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from app.capabilities.registry import MAX_DAYS
 from app.schemas.analytics import AnalysisResponse
 from app.schemas.sales import StrictModel
 
@@ -15,7 +16,7 @@ class DateRange(StrictModel):
 
     @model_validator(mode="after")
     def bounded(self):
-        if not 1 <= (self.end_exclusive - self.start).days <= 90:
+        if not 1 <= (self.end_exclusive - self.start).days <= MAX_DAYS:
             raise ValueError("请选择 1 至 90 天的日期区间")
         return self
 

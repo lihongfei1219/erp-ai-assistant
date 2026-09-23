@@ -8,57 +8,24 @@ from zoneinfo import ZoneInfo
 from pydantic import ValidationError
 
 from app.analysis.sales_query import QueryUnavailable
+from app.capabilities.registry import DOMAIN_LABELS
+from app.capabilities.registry import METRICS as METRICS
+from app.capabilities.registry import OPERATIONS as OPERATIONS
+from app.capabilities.registry import TARGETS as TARGETS
+from app.capabilities.registry import target_supported as target_supported
+from app.capabilities.view import capability_view, date_bounds, unavailable_message
+from app.capabilities.view import executable_domains as executable_domains
 from app.schemas.analytics import AnalysisResult
 from app.schemas.operations import OperationsSnapshot
 
 ZERO = Decimal(0)
-DOMAIN_LABELS = {"sales": "销售", "returns": "退货", "shipping": "销售出库", "inventory": "库存"}
-OPERATIONS = {
-    "returns": {"summary", "trend", "ranking", "list", "existence"},
-    "shipping": {"summary", "trend", "ranking", "list", "existence"},
-    "inventory": {"summary", "ranking", "list", "existence"},
-}
-METRICS = {
-    "sales": {"amount", "orders"},
-    "returns": {"amount", "orders", "quantity"},
-    "shipping": {"amount", "orders", "quantity"},
-    "inventory": {"stock", "quantity"},
-}
-TARGETS = {domain: {"product", "buyer"} for domain in DOMAIN_LABELS}
-TARGETS["inventory"] = {"product"}
-
-
-def target_supported(domain, operation, target):
-    if target is None:
-        return True
-    return target in TARGETS[domain] and (
-        domain == "sales" or operation not in {"summary", "trend", "existence"}
-    )
-
-
-def executable_domains(report):
-    result = ["sales"]
-    if report.operations:
-        result.extend(
-            domain
-            for domain in OPERATIONS
-            if getattr(report.operations, domain) is not None
-            and (domain != "inventory" or report.metadata.scope.all_buyers)
-        )
-    return result
 
 
 def domain_dates(report, domain):
-    if domain not in executable_domains(report):
-        raise QueryUnavailable(f"{DOMAIN_LABELS[domain]}事实未加载，请生成包含该业务的新快照。")
-    tz = ZoneInfo(
-        report.operating.policy.business_timezone if report.operating else "Asia/Shanghai"
-    )
-    facts = getattr(report.operations, domain)
-    if domain == "inventory":
-        day = facts.as_of.astimezone(tz).date()
-        return day, day + timedelta(days=1)
-    return facts.start, min(facts.end_exclusive, report.metadata.source_as_of.astimezone(tz).date())
+    entry = capability_view(report)["domains"][domain]
+    if not entry["executable"]:
+        raise QueryUnavailable(unavailable_message(entry))
+    return date_bounds(report, domain)
 
 
 def validate_operation_step(report, step):

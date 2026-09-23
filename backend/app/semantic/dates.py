@@ -4,6 +4,8 @@ import re
 import unicodedata
 from datetime import date, timedelta
 
+from app.capabilities.registry import MAX_DAYS
+
 _DIGITS = dict(zip("零〇一二三四五六七八九两", [0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 2], strict=True))
 _CN = r"[零〇一二三四五六七八九十百两]+"
 _DAY = r"(?:(?P<y>\d{4})年)?(?P<m>\d{1,2})月(?P<d>\d{1,2})[日号]?"
@@ -71,7 +73,7 @@ def resolve_period(expression: str, today: date) -> tuple[date, date]:
         return start, today + timedelta(days=1)
     if match := re.fullmatch(r"(?:最近|过去|近|之前)?(\d+)(天|周)", text):
         days = int(match[1]) * (7 if match[2] == "周" else 1)
-        if not 1 <= days <= 90:
+        if not 1 <= days <= MAX_DAYS:
             raise ValueError("只支持1至90天")
         return today - timedelta(days=days), today
     raise ValueError("请明确日期范围")

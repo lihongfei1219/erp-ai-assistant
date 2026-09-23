@@ -91,6 +91,7 @@ def test_help_and_coverage_reach_bot_without_calling_model(multi_report):
 
 def test_help_hides_inventory_outside_authorized_platform_scope(multi_report):
     restricted = multi_report.model_copy(update={
+        "operations": multi_report.operations.model_copy(update={"all_buyers": False}),
         "metadata": multi_report.metadata.model_copy(update={
             "scope": multi_report.metadata.scope.model_copy(update={"all_buyers": False})
         })

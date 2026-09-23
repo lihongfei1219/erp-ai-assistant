@@ -8,19 +8,18 @@ from starlette.concurrency import run_in_threadpool
 
 from app.analysis.analytics import available_dates, execute_analysis
 from app.analysis.operations import (
-    METRICS as DOMAIN_METRICS,
-)
-from app.analysis.operations import (
-    OPERATIONS as DOMAIN_OPERATIONS,
-)
-from app.analysis.operations import (
-    TARGETS,
     domain_dates,
     executable_domains,
-    target_supported,
 )
 from app.analysis.planning import finish_compilation, resolve_question
 from app.analysis.sales_query import QueryUnavailable
+from app.capabilities.registry import MAX_DAYS, TARGETS, semantic_metrics, target_supported
+from app.capabilities.registry import (
+    METRICS as DOMAIN_METRICS,
+)
+from app.capabilities.registry import (
+    OPERATIONS as DOMAIN_OPERATIONS,
+)
 from app.schemas.analytics import AnalysisQuestion
 from app.semantic.catalog import load_catalog
 from app.semantic.compiler import compile_request, context_from_plan
@@ -217,7 +216,7 @@ def _set(intent_id, field, value):
 def _valid_date_choice(item, field, value, start, end, today):
     try:
         a, b = resolve_period(value, today)
-        if a < start or b > end or not 1 <= (b - a).days <= 90:
+        if a < start or b > end or not 1 <= (b - a).days <= MAX_DAYS:
             return None
         if item.operation == "comparison":
             other = item.comparison_time if field == "time" else item.time
@@ -307,9 +306,7 @@ def _build_guidance(resolution, report, today):
         item = next(i for i in context.intents if i.domain in {None, "unknown"})
         field, kind = "domain", "missing"
         question = "你目前最想了解哪方面的经营情况？也可以直接描述遇到的问题。"
-        values(
-            "domain", [("sales", "销售表现"), ("returns", "退货情况"), ("inventory", "库存情况")]
-        )
+        values("domain", [(domain, DOMAINS[domain] + "情况") for domain in domains])
     elif any(i.domain not in domains for i in context.intents):
         item = next(i for i in context.intents if i.domain not in domains)
         field, kind = "domain", "capability_gap"
@@ -328,7 +325,8 @@ def _build_guidance(resolution, report, today):
                     if i.domain != "sales"
                 ],
             )
-        offer("结束本次需求，另建销售概览", action="new_sales")
+        if "sales" in domains:
+            offer("结束本次需求，另建销售概览", action="new_sales")
     elif any(not target_supported(i.domain, i.operation, i.target) for i in context.intents):
         item = next(
             i for i in context.intents if not target_supported(i.domain, i.operation, i.target)
@@ -403,7 +401,7 @@ def _build_guidance(resolution, report, today):
                 (m, "改按" + _metric_label(item, m))
                 for m in ("amount", "orders", "stock", "quantity")
                 if m in DOMAIN_METRICS[item.domain]
-                and (item.operation not in {"comparison", "anomalies"} or m == "amount")
+                and m in semantic_metrics(item.domain, item.operation)
             ][:3],
         )
     elif any(
@@ -463,6 +461,8 @@ def _build_guidance(resolution, report, today):
             ("ranking", f"改看{target_label}排行"),
             ("list", f"改看{target_label}明细"),
         ]:
+            if op not in DOMAIN_OPERATIONS[item.domain]:
+                continue
             # Preserve domain, metric, dates and object unless the chosen label explicitly
             # removes a grouping or comparison which the replacement cannot express.
             edits = [
@@ -548,7 +548,7 @@ def _build_guidance(resolution, report, today):
                             i
                             for i in context.intents
                             if i.operation
-                            not in {"summary", "trend", "ranking", "comparison", "anomalies"}
+                            not in DOMAIN_OPERATIONS.get(i.domain, ())
                         ),
                         item,
                     )
@@ -582,7 +582,7 @@ def _build_guidance(resolution, report, today):
                                 ),
                                 ("trend", "看看每日变化"),
                             ]
-                            if item.domain == "sales" or op in DOMAIN_OPERATIONS[item.domain]
+                            if op in DOMAIN_OPERATIONS[item.domain]
                         ],
                     )
             elif field == "metric":
@@ -641,7 +641,9 @@ def _apply_choice(body, previous, today, *, domains=("sales",)):
         raise DialogueChoiceUnavailable("这条建议不接受日期修改。")
     if choice["kind"] == "new_sales":
         request = SemanticRequest(intents=[{"domain": "sales", "operation": "summary"}])
-        return compile_request(request, question="", today=today, trusted_dates=True)
+        return compile_request(
+            request, question="", today=today, trusted_dates=True, domains=domains
+        )
     edits = choice["edits"]
     if choice["kind"] == "date_range":
         if body.date_range is None:

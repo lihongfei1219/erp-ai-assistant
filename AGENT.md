@@ -12,6 +12,8 @@
 
 ## 数据与模型边界
 
+- 执行能力统一注册在`backend/app/capabilities/registry.py`；`view.py`按快照覆盖、完整性标记及授权生成当前能力视图。模型元信息、API目录、计划校验及引导共用该来源；`semantic-catalog.json`仅维护可表达的业务词汇与口径，不重复维护执行白名单。能力版本和覆盖变化使旧会话／建议失效，不能静默迁移旧选择。
+
 - SQL先限制日期、必要字段和权限范围，参数化查询；助手连接每次验证数据库名，严禁向ERP_Local写任务或迁移。
 - 金额使用Decimal，计算与快照保留四位；飞书展示两位不改变事实。订单、明细、支付、退款分清粒度，主明细必须对账，避免关联放大。
 - 有效状态暂定订单完成、已出库；CNY、Asia/Shanghai暂定。不是支付成交额，未扣退款。规则位于`backend/config/business-rules.json`，不确定事项只记[业务假设](docs/business-assumptions.md)。改规则后生成新快照，不能覆盖旧结果。

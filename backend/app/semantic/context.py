@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from app.analysis.sales_query import QueryUnavailable
+from app.capabilities.view import capability_view
 from app.semantic.catalog import load_catalog
 from app.semantic.schemas import SemanticContext
 
@@ -34,6 +35,7 @@ def snapshot_key(report) -> str:
     value = {
         "metadata": report.metadata.model_dump(mode="json"),
         "policy": report.operating.policy_fingerprint if report.operating else None,
+        "capabilities": capability_view(report),
     }
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 

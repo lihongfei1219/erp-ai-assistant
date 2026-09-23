@@ -29,15 +29,6 @@
         "payment",
         "profit"
       ],
-      "executable_metrics": [
-        "amount",
-        "orders"
-      ],
-      "executable_targets": [
-        "product",
-        "buyer"
-      ],
-      "default_metric": "amount",
       "definition": "amount为有效订单金额，按创建日期统计；不是支付金额，未扣退货退款。商品按明细金额，订单数去重。"
     },
     "returns": {
@@ -56,25 +47,8 @@
         "return_rate",
         "payment"
       ],
-      "executable_metrics": [
-        "amount",
-        "orders",
-        "quantity"
-      ],
-      "executable_targets": [
-        "product",
-        "buyer"
-      ],
       "unavailable_message": "已理解退货需求；当前快照尚未接入退货事实，请重新取数生成包含该业务的新快照。",
-      "definition": "按已完成销售退货单创建日期统计，amount为退货单金额，orders为退货单数，quantity按单位分别统计。不是成功退款；销售金额未扣退货。退货率的分母、观察期尚未接入。",
-      "default_metric": "amount",
-      "executable_operations": [
-        "summary",
-        "ranking",
-        "list",
-        "existence",
-        "trend"
-      ]
+      "definition": "按已完成销售退货单创建日期统计，amount为退货单金额，orders为退货单数，quantity按单位分别统计。不是成功退款；销售金额未扣退货。退货率的分母、观察期尚未接入。"
     },
     "shipping": {
       "label": "出库",
@@ -90,25 +64,8 @@
         "orders",
         "quantity"
       ],
-      "executable_metrics": [
-        "amount",
-        "orders",
-        "quantity"
-      ],
-      "executable_targets": [
-        "product",
-        "buyer"
-      ],
       "unavailable_message": "已理解出库需求；当前快照尚未接入出库事实，请重新取数生成包含该业务的新快照。",
-      "definition": "当前支持已确认的销售出库，按出库确认日期统计，amount为出库单金额，orders为出库单数，quantity为实际出库明细数量且按单位分别统计。采购退出、销毁等其他出库类型暂未接入；明确这些类型时必须保留筛选。",
-      "default_metric": "orders",
-      "executable_operations": [
-        "summary",
-        "ranking",
-        "list",
-        "existence",
-        "trend"
-      ]
+      "definition": "当前支持已确认的销售出库，按出库确认日期统计，amount为出库单金额，orders为出库单数，quantity为实际出库明细数量且按单位分别统计。采购退出、销毁等其他出库类型暂未接入；明确这些类型时必须保留筛选。"
     },
     "inventory": {
       "label": "库存",
@@ -124,26 +81,11 @@
         "quantity",
         "turnover"
       ],
-      "executable_metrics": [
-        "stock",
-        "quantity"
-      ],
-      "executable_targets": [
-        "product"
-      ],
       "unavailable_message": "已理解库存需求；当前快照尚未接入库存事实，请重新取数生成包含该业务的新快照。",
-      "definition": "商品批次库存余额，只支持备份截至时点，不是实时或该日日末库存。stock和quantity均按单位分别统计、分别排行，不能跨天求和；仓库维度、历史趋势、动销与周转尚未接入。库存多且卖得慢是相互依赖条件，不能拆为无关查询。",
-      "default_metric": "stock",
-      "executable_operations": [
-        "summary",
-        "ranking",
-        "list",
-        "existence"
-      ]
+      "definition": "商品批次库存余额，只支持备份截至时点，不是实时或该日日末库存。stock和quantity均按单位分别统计、分别排行，不能跨天求和；仓库维度、历史趋势、动销与周转尚未接入。库存多且卖得慢是相互依赖条件，不能拆为无关查询。"
     }
   },
   "defaults": {
-    "ranking_limit": 10,
     "ranking_order": "descending",
     "unspecified_metric": "未指定衡量方式的销售分析默认有效订单金额；同对象追问保留既有指标；明确指标优先于默认，不能因能力缺口替换指标。",
     "generic_drug_scope": "药品泛称按当前商品范围理解；必须显示未按药品类别筛选。只看药品、排除器械、具体类别或名称属于明确筛选，必须保留。",

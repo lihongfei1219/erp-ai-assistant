@@ -85,7 +85,10 @@ def test_interpret_is_independent_of_execution_and_reports_capabilities(
     body = result.json()
     assert body["status"] == "unsupported"
     assert body["semantic"]["intents"][0]["domain"] == "returns"
-    assert "未接入" in body["message"] and "results" not in body
+    assert "未加载" in body["message"] and "results" not in body
+    capabilities = client.get("/api/v1/analysis/catalog").json()["semantic_domains"]
+    assert capabilities["returns"]["reason_code"] == "facts_missing"
+    assert not capabilities["returns"]["executable"]
     assert client.post("/api/v1/analysis/interpret", json={"question": "销售"}).status_code == 200
 
 

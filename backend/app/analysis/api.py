@@ -10,13 +10,12 @@ from starlette.concurrency import run_in_threadpool
 from app.analysis.analytics import METRICS, TITLES, available_dates, execute_analysis
 from app.analysis.dialogue import DialogueChoiceUnavailable
 from app.analysis.dialogue import converse as resolve_dialogue
-from app.analysis.operations import DOMAIN_LABELS, domain_dates, executable_domains
 from app.analysis.planning import resolve_question
 from app.analysis.sales_query import QueryUnavailable
+from app.capabilities.view import capability_view
 from app.orchestration.store import GraphConflict
 from app.schemas.analytics import AnalysisPlan, AnalysisQuestion, AnalysisResponse
 from app.schemas.sales import SalesReport
-from app.semantic.catalog import load_catalog
 from app.semantic.context import decode_context, encode_context
 from app.semantic.dialogue_schemas import ConversationRequest, DialogueTurn
 from app.semantic.provider import SemanticPlanner, SemanticProviderUnavailable
@@ -60,29 +59,19 @@ def register_analysis_routes(router, get_report, planner=None, *, context_secret
             enabled = get_planner().enabled
         except QueryUnavailable:
             enabled = False
+        view = capability_view(report)
         return {
             "available_start": start,
             "available_end_exclusive": end,
             "metrics": METRICS,
             "analyses": TITLES,
             "model_enabled": enabled,
-            "max_days": 90,
-            "max_steps": 6,
-            "semantic_domains": {
-                key: {
-                    "label": DOMAIN_LABELS[key],
-                    "executable": key in executable_domains(report),
-                    **(
-                        {
-                            "available_start": domain_dates(report, key)[0],
-                            "available_end_exclusive": domain_dates(report, key)[1],
-                        }
-                        if key in executable_domains(report) and key != "sales"
-                        else {}
-                    ),
-                }
-                for key, value in load_catalog()["domains"].items()
-            },
+            "max_days": view["max_days"],
+            "max_steps": view["max_steps"],
+            "max_items": view["max_items"],
+            "capability_version": view["version"],
+            "object_filters": view["object_filters"],
+            "semantic_domains": view["domains"],
         }
 
     @router.post("/analysis/interpret", response_model=SemanticInterpretation)

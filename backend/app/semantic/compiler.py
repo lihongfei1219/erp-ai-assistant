@@ -9,9 +9,15 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from app.analysis.operations import METRICS as EXECUTABLE_METRICS
-from app.analysis.operations import OPERATIONS as BUSINESS_OPERATIONS
-from app.analysis.operations import TARGETS, target_supported
+from app.capabilities.registry import (
+    MAX_STEPS,
+    OBJECT_FILTERS,
+    TARGETS,
+    semantic_metrics,
+    target_supported,
+)
+from app.capabilities.registry import METRICS as EXECUTABLE_METRICS
+from app.capabilities.registry import OPERATIONS as BUSINESS_OPERATIONS
 from app.schemas.analytics import AnalysisPlan, AnalysisStep
 from app.semantic.catalog import load_catalog
 from app.semantic.dates import (
@@ -286,7 +292,7 @@ def _merge(request: SemanticRequest, previous: SemanticContext | None) -> _Merge
             intents[index] = SemanticIntent.model_validate(values)
         except ValidationError as exc:
             raise ValueError("修改后的条件无效；已保留原草稿，请重新说明该条件。") from exc
-    if len(intents) + len(request.add_intents) > 6:
+    if len(intents) + len(request.add_intents) > MAX_STEPS:
         raise ValueError("一次最多分析6个目标；已保留原草稿，请先移除不需要的目标再添加。")
     issues = []
     added_ids = set()
@@ -717,7 +723,12 @@ def compile_request(
         )
     unavailable = list(dict.fromkeys(i.domain for i in intents if i.domain not in domains))
     if unavailable:
-        message = "\n".join(catalog["domains"][d]["unavailable_message"] for d in unavailable)
+        message = "\n".join(
+            catalog["domains"][d].get(
+                "unavailable_message", f"{catalog['domains'][d]['label']}当前不可执行。"
+            )
+            for d in unavailable
+        )
         if len(intents) > 1:
             message += "\n本次组合问题未执行；你可以单独询问已支持的销售分析。"
         return stop("unsupported", message)
@@ -745,7 +756,7 @@ def compile_request(
             ["target"],
             intent_id=item.id,
         )
-    if any(i.filters for i in intents):
+    if not OBJECT_FILTERS and any(i.filters for i in intents):
         return stop(
             "unsupported",
             "已理解你的筛选要求；指定商品、客户、类别、仓库等筛选尚未接入，不能忽略条件后执行。",
@@ -771,7 +782,7 @@ def compile_request(
         for i in intents
         if i.operation in {None, "unknown"}
         or i.domain == "sales"
-        and i.operation not in {"summary", "trend", "ranking", "comparison", "anomalies"}
+        and i.operation not in BUSINESS_OPERATIONS["sales"]
     ]
     if missing_operations:
         return stop(
@@ -842,11 +853,7 @@ def compile_request(
                 restate=True,
                 intent_id=item.id,
             )
-        if item.operation not in (
-            {"summary", "trend", "ranking", "comparison", "anomalies"}
-            if item.domain == "sales"
-            else BUSINESS_OPERATIONS[item.domain]
-        ):
+        if item.operation not in BUSINESS_OPERATIONS[item.domain]:
             return stop(
                 "clarify",
                 "销售目前支持概览、趋势、商品/客户排行、期间比较和日波动，请明确分析目标。",
@@ -858,7 +865,7 @@ def compile_request(
         kind = (
             f"{item.target or 'product'}_ranking" if item.operation == "ranking" else item.operation
         )
-        if kind in {"comparison", "anomalies"} and metric != "amount":
+        if metric not in semantic_metrics(item.domain, item.operation):
             return stop("unsupported", "当前该分析类型仅支持金额口径，不能忽略你明确指定的指标。")
         # Summary already returns order_count alongside amount; keep the requested semantic metric.
         values = dict(

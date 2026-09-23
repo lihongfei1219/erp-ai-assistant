@@ -5,7 +5,9 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from app.capabilities.registry import MAX_ITEMS, MAX_STEPS
 from app.schemas.sales import StrictModel
+from app.semantic.catalog import load_catalog
 
 Domain = Literal["sales", "returns", "shipping", "inventory", "unknown"]
 Operation = Literal[
@@ -43,7 +45,7 @@ class SemanticIntent(StrictModel):
     metric: Metric | None = None
     time: str | None = Field(default=None, min_length=1, max_length=100)
     comparison_time: str | None = Field(default=None, min_length=1, max_length=100)
-    limit: int | None = Field(default=None, ge=1, le=50, strict=True)
+    limit: int | None = Field(default=None, ge=1, le=MAX_ITEMS, strict=True)
     order: Literal["descending", "ascending"] | None = None
     scope: Literal["authorized", "all_buyers"] | None = None
     generic_product_scope: bool | None = None
@@ -79,8 +81,8 @@ class SemanticEdit(StrictModel):
 class SemanticRequest(StrictModel):
     schema_version: Literal["1"] = "1"
     mode: Literal["new", "followup", "answer"] = "new"
-    intents: list[SemanticIntent] = Field(default_factory=list, max_length=6)
-    add_intents: list[SemanticIntent] = Field(default_factory=list, max_length=6)
+    intents: list[SemanticIntent] = Field(default_factory=list, max_length=MAX_STEPS)
+    add_intents: list[SemanticIntent] = Field(default_factory=list, max_length=MAX_STEPS)
     unresolved: list[str] = Field(default_factory=list, max_length=10)
     resolved_conditions: list[str] = Field(default_factory=list, max_length=10)
     issues: list[SemanticIssue] = Field(default_factory=list, max_length=10)
@@ -103,8 +105,8 @@ class GraphReference(StrictModel):
 
 class SemanticContext(StrictModel):
     schema_version: Literal["1"] = "1"
-    catalog_version: str = "erp.semantic.v4"
-    intents: list[SemanticIntent] = Field(min_length=1, max_length=6)
+    catalog_version: str = Field(default_factory=lambda: load_catalog()["version"])
+    intents: list[SemanticIntent] = Field(min_length=1, max_length=MAX_STEPS)
     pending: list[str] = Field(default_factory=list, max_length=10)
     unresolved: list[str] = Field(default_factory=list, max_length=10)
     product_scope_note: bool = False

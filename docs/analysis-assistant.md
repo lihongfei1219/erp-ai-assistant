@@ -96,7 +96,7 @@ uv run python scripts/start_backend.py
 
 本机分析接口无需访问令牌；数据仍受服务端快照范围和日期限制：
 
-- `GET /api/v1/analysis/catalog`：可用日期、工具和指标定义、模型是否启用。
+- `GET /api/v1/analysis/catalog`：保留可用日期、工具／指标定义和模型启用状态；新增`capability_version`、`max_items`、`object_filters`。`semantic_domains`由统一能力视图生成，每域包含`executable`、`reason_code`、可用日期、粒度／时间依据及实际支持的操作指标组合。不可执行域的执行清单为空，库存受全平台授权与备份时点限制。模型能力元信息和飞书帮助使用同一来源。
 - `POST /api/v1/analysis/converse`：网页引导接口，飞书复用同一个底层对话服务；一次请求完成理解、引导或执行，通常只调用一次模型。
 - `POST /api/v1/analysis/run`：`{"steps":[{"kind":"summary","start_date":"2026-09-01","end_date_exclusive":"2026-09-08"}]}`。
 - `POST /api/v1/analysis/ask`：`{"question":"2026年9月1日至7日销售概览","previous_plan":null}`。

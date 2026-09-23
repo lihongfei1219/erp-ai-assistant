@@ -9,62 +9,29 @@ import pandas as pd
 
 from app.analysis.charts import build_chart
 from app.analysis.sales_query import QueryUnavailable, _local_date
+from app.capabilities.registry import SALES_METRIC_DEFINITIONS, SALES_TITLES
+from app.capabilities.view import capability_view, date_bounds, unavailable_message
 from app.core.business_rules import policy_fingerprint
 from app.schemas.analytics import AnalysisPlan, AnalysisResponse, AnalysisResult
 from app.schemas.sales import SalesReport
 
 ZERO = Decimal("0.0000")
-METRICS = [
-    {
-        "id": "amount",
-        "label": "有效订单金额",
-        "definition": (
-            "纳入快照有效状态的订单表头金额之和；商品按明细金额。不是支付成交额，不扣退款。"
-        ),
-    },
-    {
-        "id": "orders",
-        "label": "订单数",
-        "definition": "按订单 ID 去重；不同商品订单数不可相加作为总订单数。",
-    },
-    {"id": "buyers", "label": "采购企业数", "definition": "在所选期间有效订单中按企业编码去重。"},
-    {
-        "id": "change",
-        "label": "期间变化率",
-        "definition": "(本期金额－比较期金额) / 比较期金额；基数为零时无定义。",
-    },
-    {
-        "id": "anomalies",
-        "label": "日波动线索",
-        "definition": (
-            "与区间内前一日比较，金额变化绝对比例至少 50%；"
-            "前日零、本日非零单独标记，不代表统计异常或因果。"
-        ),
-    },
-]
-TITLES = {
-    "summary": "销售概览",
-    "trend": "每日销售趋势",
-    "buyer_ranking": "客户排行",
-    "product_ranking": "商品排行",
-    "comparison": "期间变化与贡献",
-    "anomalies": "日波动线索",
-}
+METRICS = SALES_METRIC_DEFINITIONS
+TITLES = SALES_TITLES
 
 
 def available_dates(report: SalesReport):
-    if report.operating is None or report.metadata.source_as_of.tzinfo is None:
-        raise QueryUnavailable("快照缺少经营规则或带时区的数据水位，请重新生成。")
-    tz = ZoneInfo(report.operating.policy.business_timezone)
-    return report.metadata.window.start, min(
-        report.metadata.window.end, report.metadata.source_as_of.astimezone(tz).date()
-    )
+    return date_bounds(report, "sales")
 
 
 def validate_plan(report: SalesReport, plan: AnalysisPlan):
     from app.analysis.operations import validate_operation_step
 
+    view = capability_view(report)
     for step in plan.steps:
+        capability = view["domains"][step.domain]
+        if not capability["executable"]:
+            raise QueryUnavailable(unavailable_message(capability))
         if step.domain != "sales":
             validate_operation_step(report, step)
             continue
