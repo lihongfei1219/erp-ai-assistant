@@ -21,6 +21,7 @@ class DateRange(StrictModel):
 
 
 class ConversationRequest(StrictModel):
+    request_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,80}$")
     question: str | None = Field(default=None, min_length=1, max_length=1000)
     conversation_token: str | None = Field(default=None, min_length=1, max_length=60000)
     choice_id: str | None = Field(default=None, min_length=1, max_length=100)

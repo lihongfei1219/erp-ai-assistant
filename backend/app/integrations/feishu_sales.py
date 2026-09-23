@@ -36,20 +36,6 @@ HELP = (
     "暂不支持药品分类、数量排行、利润、条件筛选或连续追问。"
 )
 
-ANALYTICS_HELP = (
-    "ERP AI 数据分析：在本群 @我，直接说你想了解的经营情况，不需要按固定格式提问。\n"
-    "我会先展示已理解的目标和条件；还缺关键信息时，每次只补充一个问题。"
-    "你可以自由补充日期、修改口径或移除条件，也可以选择卡片中的建议。\n"
-    "当前只有一轮待答建议时可回复数字；多轮建议容易混淆时，请用文字说明选择。\n"
-    "已接通销售概览、趋势、商品及客户排行、等长期间比较和日波动线索。"
-    "可以同时提出多个分析目标，未接通的部分会说明原因并提供可选方向。\n"
-    "追问仅继承你在本群30分钟内成功收到的分析或引导；“清除追问上下文”重新开始。\n"
-    "“药品”按当前商品范围统计，并非药品分类筛选；“卖得好”默认金额前10。\n"
-    "发送“数据范围”查看完整日期。退货、出库、库存、利润、数量排行及指定实体筛选尚未接入。\n"
-    "模型不可用时仍可发送固定指令：2026-09-01至2026-09-05 商品销售额排行 前10"
-)
-
-
 class SalesBot:
     def __init__(
         self,
@@ -160,7 +146,10 @@ class SalesBot:
 
             return answer_analysis(job, self.store, self.report_loader, self.analysis_planner)
         if job["payload"]["kind"] == "clear_context":
-            return {}, "已清除当前群中你的追问上下文。下一次请说明日期和分析目标。"
+            return {}, (
+                "已清除当前群中你的追问上下文。再次 @我，说说你想了解什么；"
+                "可以先说大致目标，我会帮你逐步补齐。"
+            )
         if job["payload"]["kind"] == "interpreting":
             raise QueryUnavailable("上次自然语言解析被中断，为避免重复请求，请重新提问。")
         if job["payload"]["kind"] == "interpret":
@@ -170,11 +159,19 @@ class SalesBot:
         if kind == "ping":
             return {}, "机器人连接正常。发送“帮助”查看当前支持的分析类型和提问示例。"
         if kind == "help":
-            return {}, ANALYTICS_HELP if self.analysis_planner is not None else HELP
+            from app.integrations.feishu_guidance import help_text
+
+            return {}, (
+                help_text(self.report_loader()) if self.analysis_planner is not None else HELP
+            )
         if kind == "notice":
             return {}, payload["notice"] + "\n发送“帮助”查看支持的提问方式。"
         report = self.report_loader()
         if kind == "coverage":
+            if self.analysis_planner is not None:
+                from app.integrations.feishu_guidance import coverage_text
+
+                return {}, coverage_text(report)
             from datetime import timedelta
 
             from app.schemas.sales import AnalysisWindow

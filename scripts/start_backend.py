@@ -30,7 +30,7 @@ def main() -> None:
         import uvicorn
     except ImportError:
         parser.error(
-            "Use the project .venv Python with backend/requirements.lock installed"
+            "Run uv sync --locked, then uv run python scripts/start_backend.py"
         )
 
     os.environ["ERP_REPORT_PATH"] = str(report_path)

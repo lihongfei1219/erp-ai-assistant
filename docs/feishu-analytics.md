@@ -30,6 +30,8 @@
 
 引导卡片先说明已理解内容，再问一个关键问题，并列出当前可行的建议。明确的筛选、数量口径或未接入业务仍保留；需要移除条件、换指标、改日期或只保留可分离的销售目标时，由用户明确选择。可以自由表达修改，未提到的条件继续保留，不要求每次重复完整问题。
 
+飞书卡片按“已理解的需求／当前默认／本轮需要确认／可选建议／如何继续”分段展示；缺信息、能力不足、数据范围不足分别使用明确标题。每次补充仍需在同一群再次@机器人。日期引导展示本轮待确认目标的可用范围，库存仅提示备份时点；重复澄清时说明已有条件保留，只需修改相关部分。建议继续沿用已绑定动作，不新增问法词典，也不要求照抄建议。发送“帮助”或“数据范围”时，根据当前快照和授权分别展示四域是否可查及对应日期，不再使用旧的三域未接入说明。
+
 建议以编号显示；仅在当前身份30分钟窗口、清除屏障之后只有唯一待答轮次，且最近语义任务已经成功送达时，纯数字回复才直接对应那轮允许动作，不再调用模型。出现另一轮建议、中间新问题、未知送达或过期时，数字不会套到另一组建议，机器人保留可用草稿并请用文字说明选择。网页日期选择器不出现在飞书卡片中，仍可用文字日期补充。当前没有卡片点击回调，也没有从被引用卡片定位旧编号的能力。
 
 ## 回复内容
@@ -59,8 +61,8 @@
 先完成[应用接入与授权](feishu-app-setup.md)。已有运行进程无需重复初始化或启动；新环境从根目录执行：
 
 ```powershell
-.venv/Scripts/python.exe scripts/init_assistant_db.py
-.venv/Scripts/python.exe scripts/start_feishu_bot.py --sales --report-path .local/reports/platform-operating-20260916.json
+uv run python scripts/init_assistant_db.py
+uv run python scripts/start_feishu_bot.py --sales --report-path .local/reports/platform-operating-20260916.json
 ```
 
 初始化只创建独立`ERP_AI_Assistant`及任务表，不修改`ERP_Local`。运行时不自动建库；`ERP_ASSISTANT_ODBC`也必须指向助手库。发现、连接测试和销售问数共用单进程锁，切换前先停止本应用原进程。需要电脑、SQL Server、网络和机器人进程持续运行，尚未配置Windows服务或开机启动。
@@ -95,10 +97,10 @@
 
 ```powershell
 $env:ERP_RUN_ASSISTANT_TESTS='1'
-../.venv/Scripts/python.exe -m pytest tests/integration/test_feishu_jobs.py -q
+uv run python -m pytest tests/integration/test_feishu_jobs.py -q
 Remove-Item Env:ERP_RUN_ASSISTANT_TESTS
 $env:ERP_RUN_MODEL_TESTS='1'
-../.venv/Scripts/python.exe -m pytest tests/integration/test_feishu_analytics_model.py -q
+uv run python -m pytest tests/integration/test_feishu_analytics_model.py -q
 Remove-Item Env:ERP_RUN_MODEL_TESTS
 ```
 
@@ -109,7 +111,7 @@ SQL测试仅操作随机应用ID下的合成助手任务并清理自身记录；
 可复用的合成布局检查，从根目录执行：
 
 ```powershell
-.venv/Scripts/python.exe scripts/preview_feishu_display.py
+uv run python scripts/preview_feishu_display.py
 node scripts/check_feishu_display.cjs --fetch-chart
 ```
 

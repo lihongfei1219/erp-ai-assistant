@@ -4,6 +4,7 @@ import sys
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
@@ -37,6 +38,9 @@ report = analyze_sales(SalesExtract(pd.DataFrame(rows), pd.DataFrame(lines), 12,
 os.environ["FEISHU_WEBHOOK_URL"] = ""
 os.environ["FEISHU_WEBHOOK_SECRET"] = ""
 os.environ["ERP_AI_ENABLED"] = "0"
+os.environ["ERP_GRAPH_STATE_DIR"] = str(
+    Path(__file__).resolve().parents[2] / ".local" / "browser-graph" / uuid4().hex
+)
 from operations_fixture import with_operations
 report = with_operations(report)
 application = create_app(ApiSettings(), report=report)

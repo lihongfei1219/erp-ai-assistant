@@ -5,7 +5,7 @@
 ## 范围与技术决策
 
 - 当前任务范围是只读数据分析，不执行ERP业务操作。独立云端语义层接销售、已完成销售退货、已确认销售出库、商品批次库存执行器。销售原六类分析保留；新域范围及数据口径见架构与数据字典。库存仅有备份时点，全平台授权才可查询，不能假定采购企业拥有全局库存权限。
-- Python 3.11、FastAPI、Pandas/Decimal、Pydantic AI、SQLAlchemy/pyodbc；前端React/TypeScript/Vite，网页Plotly本机脚本，飞书原生卡片2.0。版本以锁定依赖为准。
+- Python由uv项目管理：根目录`pyproject.toml`声明依赖、`uv.lock`锁定版本、`.python-version`选择3.11，使用`uv sync --locked`和`uv run`；不再维护独立requirements锁文件。技术栈为FastAPI、Pandas/Decimal、Pydantic AI、LangGraph、SQLAlchemy/pyodbc；前端React/TypeScript/Vite仍由npm及package-lock.json管理，网页Plotly本机脚本，飞书原生卡片2.0。
 - ERP来源为本机SQL Server恢复库`ERP_Local`，业务源只读。用户确认备份覆盖全平台商家。分析使用`.local/reports`快照，飞书任务／结果／发件箱使用独立`ERP_AI_Assistant.erp_ai.feishu_sales_jobs`。
 - 飞书应用机器人已有授权群和用户，`scripts/start_feishu_bot.py --sales`启用问数；日报Webhook是另一通道，尚未启用真实定时推送。
 - 用户允许按已记录的常识默认规则继续开发，不因一般口径待确认反复停工。基础设施升级需业务或性能证据，不预先增加分布式引擎、多Agent或队列平台。
@@ -34,7 +34,7 @@
 
 - 模块职责见架构文档，新增统计先有可信输入与结果契约；数值和权限由程序控制，图表只转换绘图坐标。
 - 默认pytest使用合成数据，不连接数据库或模型。`ERP_RUN_INTEGRATION=1`是源库只读测试；`ERP_RUN_ASSISTANT_TESTS=1`仅操作随机合成身份的助手任务；`ERP_RUN_MODEL_TESTS=1`显式模型评测。开关不能混为一般离线检查。
-- 后端从`backend/`运行pytest和Ruff；前端从`frontend/`运行构建及Playwright。Windows测试可指定新的`.local/`临时目录；Chrome可通过`PLAYWRIGHT_CHANNEL=chrome`使用。
+- 后端从项目根目录运行`uv run pytest`和`uv run ruff check backend`；前端从`frontend/`运行构建及Playwright。Windows测试可指定新的`.local/`临时目录；Chrome可通过`PLAYWRIGHT_CHANNEL=chrome`使用。
 - 修改计算或接口需相应回归；只改文档／缓存时检查链接、围栏、失效引用、受保护文件哈希、依赖导入和运行健康，不把这些检查称为全量业务测试。
 - 文档进度只更新`docs/project-status.md`，验证汇总到`docs/validation.md`；使用方法写对应说明。完成的阶段计划及时合并，不堆积一次性文档。
 - 检查`git diff --check`、文档相对链接、未跟踪文件；不清理其他人的源码改动，不擅自提交或推送。真实消息送达、模型联调、本地预览和业务验收分别报告。

@@ -129,7 +129,26 @@ export function Analytics() {
               : "");
           return;
         }
-        if (response.status >= 500) setRetry({ path, body });
+        if (
+          response.status === 503 ||
+          payload.detail?.code === "request_failed"
+        ) {
+          setRetry({
+            path,
+            body:
+              path === "converse"
+                ? {
+                    ...(body as DialogueRequest),
+                    request_id: crypto.randomUUID(),
+                  }
+                : body,
+          });
+        } else if (
+          response.status >= 500 ||
+          payload.detail?.code === "request_busy"
+        ) {
+          setRetry({ path, body });
+        }
         throw new Error(
           typeof payload.detail === "string"
             ? payload.detail
@@ -163,7 +182,11 @@ export function Analytics() {
   }
 
   function converse(body: Omit<DialogueRequest, "conversation_token">) {
-    void submit("converse", { ...body, conversation_token: conversationToken });
+    void submit("converse", {
+      ...body,
+      request_id: crypto.randomUUID(),
+      conversation_token: conversationToken,
+    });
   }
 
   function clearConversation() {

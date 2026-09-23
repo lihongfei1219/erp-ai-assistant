@@ -1,21 +1,24 @@
 # AI 数据分析使用说明
 
-新快照生成：在`backend/`运行`../.venv/Scripts/python.exe -m workers.extend_operations --input ../.local/reports/platform-operating-20260916.json --output ../.local/reports/platform-four-domain-20260922.json`。固定只读查询通过对账后写新文件，已存在目标禁止覆盖。网页与机器人优先加载新四域快照。退货和销售出库可查9月1日至15日，库存仅有9月16日14:33:41备份时点。
+新快照生成：在`backend/`运行`uv run python -m workers.extend_operations --input ../.local/reports/platform-operating-20260916.json --output ../.local/reports/platform-four-domain-20260922.json`。固定只读查询通过对账后写新文件，已存在目标禁止覆盖。网页与机器人优先加载新四域快照。退货和销售出库可查9月1日至15日，库存仅有9月16日14:33:41备份时点。
 
 ## 启动
 
 日常推荐使用8001，打开网页即可进入，无需本地令牌；服务当前是否运行见[项目进度](project-status.md)。下方脚本默认使用8000；可追加 `--port 8001` 使用README推荐地址。
 
-在项目根目录安装锁定依赖：
+在项目根目录用uv安装Python依赖并检查环境：
 
 ```powershell
-uv pip sync --python .venv/Scripts/python.exe backend/requirements.lock
+uv sync --locked
+uv run python scripts/check_environment.py
 ```
 
-在 `frontend/` 执行 `npm ci`、`npm run build`，返回根目录运行：
+依赖由根目录`pyproject.toml`和`uv.lock`维护，`.python-version`默认3.11。前端首次使用需在`frontend/`执行`npm ci`、`npm run build`。Windows一键入口`Setup-Environment.ps1`仍可使用，内部已改为uv项目命令；npm ci前先关闭前端开发／测试进程。环境检查不连接ERP、不调用模型、不发飞书消息。默认数据快照缺失时须恢复快照或通过`--report-path`指定已有文件；依赖安装不能替代数据准备。
+
+依赖和数据就绪后，从项目根目录运行：
 
 ```powershell
-.venv/Scripts/python.exe scripts/start_backend.py
+uv run python scripts/start_backend.py
 ```
 
 如果旧后端正在运行，先在其终端按 Ctrl+C，然后重新启动。打开 http://127.0.0.1:8000 ，直接进入「AI 数据分析」。已有项目无需重新取数；服务会加载既有经营快照。更换数据范围仍使用 `workers.analyze_sales` 生成新快照并重启服务。
@@ -51,6 +54,14 @@ uv pip sync --python .venv/Scripts/python.exe backend/requirements.lock
 正常补充、能力缺口和日期缺口显示引导卡片。比如明确要求件数而当前只有金额和订单数时，会保留件数需求并解释限制，由你决定是否改口径。日期不覆盖时显示实际完整日期，由你选择是否改期；不会把“今天”偷偷换成历史日期。同一疑点反复出现时继续显示草稿和修改入口，不要求重新填写所有内容。
 
 会话过期或快照变更时，页面保留当前可见草稿和未完成补充，停用旧建议。点击「恢复这份草稿」后，才将展示的需求和补充作为新问题重新理解；也可以直接提出新问题。此恢复依赖页面仍保有草稿，不保证关闭或刷新页面后恢复。模型、网络等服务故障单独显示错误并允许重试。
+
+## 对话状态与重试
+
+网页与飞书自由问数默认使用LangGraph编排。条件不足时保存当前草稿并暂停；补充文字或选择建议后继续。服务端重启后，只要仍在30分钟有效期且快照／版本未变，原页面中的会话可以继续；刷新或关闭页面后自动找回草稿尚未实现。
+
+网络中断后的「重试本次请求」沿用请求编号，已完成则返回原结果。模型明确失败时，点击重试才会发起新的调用。旧建议、同一会话并发提交、已过期或范围变化的会话不会直接执行；按页面提示恢复可见草稿或重新提问。模型调用前进程退出的原始输入不会自动恢复。
+
+开发运行：从根目录执行`uv sync --locked`同步`uv.lock`，按原启动方式启动即可，默认引擎为`langgraph`。若需要临时回退，可在启动进程前设置`ERP_ANALYSIS_ENGINE=legacy`；切换后原图会话需显式恢复为新会话。检查点及本地回执位于`.local/langgraph/`，可用`ERP_GRAPH_STATE_DIR`指定目录，网页和飞书自动分开。请将该目录视为本地业务数据保管，不提交Git；模型密钥和业务快照仍沿用原配置。
 
 ## 输出与指标
 
@@ -115,15 +126,15 @@ uv pip sync --python .venv/Scripts/python.exe backend/requirements.lock
 离线自动测试使用合成数据。真实模型联调需显式执行：
 
 ```powershell
-.venv/Scripts/python.exe scripts/probe_analytics_model.py --probe
+uv run python scripts/probe_analytics_model.py --probe
 ```
 
-独立语义层的合成云端回归使用`.venv/Scripts/python.exe scripts/probe_semantic_model.py --probe`；可加`--case combined`等只复测指定用例。该脚本覆盖四域、口语日期、组合、筛选与澄清补全，不读取ERP、不发送飞书消息。旧脚本保留用于旧计划器回归。
+独立语义层的合成云端回归使用`uv run python scripts/probe_semantic_model.py --probe`；可加`--case combined`等只复测指定用例。该脚本覆盖四域、口语日期、组合、筛选与澄清补全，不读取ERP、不发送飞书消息。旧脚本保留用于旧计划器回归。
 
 四域执行器的连续对话联调使用：
 
 ```powershell
-.venv/Scripts/python.exe scripts/probe_operations_model.py --probe --flow all
+uv run python scripts/probe_operations_model.py --probe --flow all
 ```
 
 `--flow smoke`只验证三个新增业务域；`--flow dialogue`验证组合后修改单项、追加独立日期的库存目标、当前库存的数据缺口与明确选择快照、自由补日期、客户维度追问及不支持指标保留整个组合。`--flow inventory`仅复测当前库存→接受快照→再问当前库存的3步流程。`--flow recovery`验证退货／出库比较能力缺口，再明确选择概览、排行或明细的8项流程。`all`共21项检查，核对业务域、操作、指标、每项目标日期及结果域；库存既有`stock`／`quantity`按同口径验证。前置步骤失败时后续记为跳过并返回非零退出码，不把跳过计为通过。该入口仅构造合成报告，不加载真实快照，问题不进入运行提示词或问法词典。
@@ -137,8 +148,8 @@ uv pip sync --python .venv/Scripts/python.exe backend/requirements.lock
 从项目根目录执行：
 
 ```powershell
-.venv/Scripts/python.exe scripts/evaluate_dialogue.py --output .local/evaluations/replay.json
-.venv/Scripts/python.exe scripts/evaluate_dialogue.py --cloud --case screenshot_chinese_date --case multi_domain_edit_append --output .local/evaluations/cloud.json
+uv run python scripts/evaluate_dialogue.py --output .local/evaluations/replay.json
+uv run python scripts/evaluate_dialogue.py --cloud --case screenshot_chinese_date --case multi_domain_edit_append --output .local/evaluations/cloud.json
 ```
 
 输出文件必须是新文件。`--case`可重复指定；省略时运行整套。默认回放`replay`中的参考语义，通过真实对话、编译器和执行器校验链路，**不衡量大模型理解准确率**。`--cloud`忽略参考语义，把问题和结构化上下文交给当前供应商；不读取ERP或本地真实快照、不发送飞书消息，不需要启动网页服务。两种模式均固定使用合成四域报告及2026-09-22作为提问日，避免“今天”随运行日期漂移。

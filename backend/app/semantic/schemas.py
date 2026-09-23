@@ -94,6 +94,13 @@ class SemanticRequest(StrictModel):
         return self
 
 
+class GraphReference(StrictModel):
+    channel: Literal["web", "feishu"]
+    thread_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    revision: int = Field(ge=1)
+    version: Literal["erp.graph.v1"] = "erp.graph.v1"
+
+
 class SemanticContext(StrictModel):
     schema_version: Literal["1"] = "1"
     catalog_version: str = "erp.semantic.v4"
@@ -112,6 +119,7 @@ class SemanticContext(StrictModel):
     dialogue_id: str | None = None
     # A rejected target patch is context for the next model turn, never an execution plan.
     pending_request: SemanticRequest | None = None
+    runtime_ref: GraphReference | None = None
 
 
 class SemanticInput(StrictModel):
