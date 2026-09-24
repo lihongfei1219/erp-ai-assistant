@@ -2,14 +2,13 @@
 
 import hashlib
 import json
-import os
 import sqlite3
 import time
 from contextlib import contextmanager
-from pathlib import Path
 from uuid import uuid4
 
 from app.analysis.sales_query import QueryUnavailable
+from app.core.environment import configured_path
 from app.semantic.schemas import GraphReference, SemanticContext
 
 GRAPH_VERSION = "erp.graph.v1"
@@ -25,10 +24,7 @@ class GraphConflict(QueryUnavailable):
 def state_directory(channel):
     if channel not in {"web", "feishu"}:
         raise ValueError("Unknown graph channel")
-    root = Path(
-        os.environ.get("ERP_GRAPH_STATE_DIR")
-        or Path(__file__).resolve().parents[3] / ".local" / "langgraph"
-    )
+    root = configured_path("ERP_GRAPH_STATE_DIR", ".local/langgraph")
     path = root / channel
     path.mkdir(parents=True, exist_ok=True)
     return path

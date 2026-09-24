@@ -1,5 +1,7 @@
+import os
 from datetime import datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -7,6 +9,13 @@ import pytest
 from app.analysis.sales import analyze_sales
 from app.connectors.qy import SalesExtract
 from app.schemas.sales import AnalysisWindow, DataScope
+
+# Unit tests never inherit the developer's private .env, including during collection.
+if not any(os.environ.get(name) == "1" for name in (
+    "ERP_RUN_INTEGRATION", "ERP_RUN_ASSISTANT_TESTS", "ERP_RUN_MODEL_TESTS",
+)):
+    os.environ["ERP_ENV_FILE"] = str(Path(__file__).with_name(".env.test-not-present"))
+    os.environ["ERP_CONTEXT_SIGNING_KEY"] = "ab" * 32
 
 
 @pytest.fixture(autouse=True)

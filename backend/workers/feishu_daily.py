@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from app.core.environment import configured_path
 from app.core.reports import load_report
 from app.notifications.daily import DigestUnavailable, build_digest, message_card
 from app.notifications.feishu import (
@@ -74,7 +75,9 @@ def scheduled_tick(
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="飞书群销售日报：默认仅预览，不发送")
     parser.add_argument(
-        "--report-path", type=Path, default=LOCAL_DIR / "reports/platform-operating-20260916.json"
+        "--report-path", type=Path, default=configured_path(
+            "ERP_REPORT_PATH", LOCAL_DIR / "reports/platform-operating-20260916.json"
+        )
     )
     parser.add_argument("--date", type=date.fromisoformat, help="单次报告日期，默认真实昨天")
     parser.add_argument("--demo", action="store_true", help="演示标签，允许备份当日部分数据")

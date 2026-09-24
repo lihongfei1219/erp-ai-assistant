@@ -6,13 +6,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'backend'))
 
 import pyodbc
 
+from app.core.environment import environment
 from app.integrations.feishu_jobs import SqlJobStore
 
 
 def main():
+    admin_odbc = environment().get('ERP_ASSISTANT_ADMIN_ODBC')
+    if not admin_odbc:
+        raise SystemExit('请在 .env 配置 ERP_ASSISTANT_ADMIN_ODBC 后再初始化助手库。')
     connection = pyodbc.connect(
-        r'DRIVER={ODBC Driver 18 for SQL Server};SERVER=lpc:.\ERPLOCAL;DATABASE=master;'
-        'Trusted_Connection=yes;Encrypt=yes;TrustServerCertificate=yes',
+        admin_odbc,
         timeout=5, autocommit=True)
     try:
         if connection.execute('SELECT DB_ID(?)', 'ERP_AI_Assistant').fetchone()[0] is None:

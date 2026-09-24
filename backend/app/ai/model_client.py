@@ -1,9 +1,7 @@
 """Minimal non-streaming Model Studio interpreter; never receives a SalesReport."""
 import asyncio
 import json
-import os
 import re
-import shlex
 import time
 from datetime import date
 from pathlib import Path
@@ -14,6 +12,7 @@ from pydantic import Field, SecretStr, model_validator
 
 from app.ai.sales_intent import ModelDecision, check_question
 from app.analysis.sales_query import QueryUnavailable
+from app.core.environment import environment
 from app.schemas.sales import StrictModel
 
 ROOT_ENV = Path(__file__).resolve().parents[3] / '.env'
@@ -41,22 +40,12 @@ class ModelSettings(StrictModel):
         return self
 
 
-def load_model_settings(path: Path = ROOT_ENV) -> ModelSettings:
+def load_model_settings(path: Path | None = None) -> ModelSettings:
     keys = {'ERP_AI_BASE_URL', 'ERP_AI_MODEL', 'ERP_AI_API_KEY', 'ERP_AI_ENABLED',
             'MAIN_VITE_PI_NORMALIZER_BASE_URL', 'MAIN_VITE_PI_NORMALIZER_MODEL',
             'DASHSCOPE_API_KEY'}
-    values = {}
     try:
-        if path.is_file():
-            for line in path.read_text(encoding='utf-8-sig').splitlines():
-                key, separator, value = line.strip().removeprefix('export ').partition('=')
-                if not separator or key.strip() not in keys:
-                    continue
-                tokens = shlex.split(value, comments=True, posix=True)
-                if len(tokens) > 1:
-                    raise ValueError('Malformed configuration')
-                values[key.strip()] = tokens[0] if tokens else ''
-        values.update({key: os.environ[key] for key in keys if key in os.environ})
+        values = {key: value for key, value in environment(path).items() if key in keys}
         base = values.get('ERP_AI_BASE_URL', values.get('MAIN_VITE_PI_NORMALIZER_BASE_URL', ''))
         model = values.get('ERP_AI_MODEL', values.get('MAIN_VITE_PI_NORMALIZER_MODEL', ''))
         secret = values.get('ERP_AI_API_KEY', values.get('DASHSCOPE_API_KEY', ''))

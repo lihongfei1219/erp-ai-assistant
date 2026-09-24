@@ -4,7 +4,6 @@ import asyncio
 import hashlib
 import hmac
 import json
-import os
 from uuid import uuid4
 
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -36,7 +35,9 @@ def outcome_from(payload):
 async def run_dialogue(
     body, report, planner, today, *, previous=None, channel="web", owner="local-workspace"
 ):
-    engine = os.environ.get("ERP_ANALYSIS_ENGINE", "langgraph")
+    from app.core.environment import environment
+
+    engine = environment().get("ERP_ANALYSIS_ENGINE", "langgraph")
     if engine not in {"langgraph", "legacy"}:
         raise GraphConflict("分析引擎配置无效，请联系管理员。")
     if previous and previous.catalog_version != load_catalog()["version"]:

@@ -20,12 +20,12 @@ uv run python -m workers.feishu_daily --date 2026-09-16 --demo
 ## 配置指定群
 
 1. 在飞书群设置中添加 **自定义机器人**，复制 Webhook。
-2. 将地址单独保存到项目根目录 `.local/feishu-webhook.txt`，UTF-8 文本，不加引号。
-3. 如果启用了签名校验，将签名密钥保存到 `.local/feishu-secret.txt`。
+2. 在项目根目录`.env`填写`FEISHU_WEBHOOK_URL`。
+3. 如果启用了签名校验，在同一文件填写`FEISHU_WEBHOOK_SECRET`。
 4. 若设置关键词，使用 **销售日报**；若设置 IP 白名单，允许发送电脑的出口 IP。
 5. 页面点击“刷新预览”，确认已配置后点击“发送演示日报到飞书群”。
 
-也可配置进程环境变量 `FEISHU_WEBHOOK_URL`、`FEISHU_WEBHOOK_SECRET`，它们优先于文件；显式空值禁用对应文件值。`.env.example` 仅为说明，不自动读取 `.env`。文件每次请求重新读取，无需重启；环境变量需在启动进程前设置。
+也可配置进程环境变量`FEISHU_WEBHOOK_URL`、`FEISHU_WEBHOOK_SECRET`，它们优先于`.env`；显式空值禁用对应配置。默认不再读取`.local`中的凭据文本，旧安装可执行迁移脚本统一转换。每次请求重新读取`.env`；环境变量需在启动进程前设置。快照与发送状态目录分别使用`ERP_REPORT_PATH`、`ERP_FEISHU_DELIVERY_DIR`。
 
 本模块使用群 Webhook，无需 App ID / App Secret。已安装的 `lark-oapi` 保留供后续应用机器人使用。浏览器不接触凭据，HTTP 请求不能指定其他接收群。当前为本机运营开发入口；机器人所在群应仅包含有权查看当前快照范围的人员。
 

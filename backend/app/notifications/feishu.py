@@ -16,6 +16,7 @@ from typing import Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from app.core.environment import configured_path, environment
 from app.notifications.daily import DailyDigest, message_card
 from app.schemas.sales import StrictModel
 
@@ -36,16 +37,11 @@ class FeishuSettings:
 
     @classmethod
     def from_env(cls):
-        def credential(env: str, filename: str) -> str:
-            value = os.environ.get(env)
-            if value is not None:
-                return value.strip()
-            path = LOCAL_DIR / filename
-            return path.read_text(encoding="utf-8-sig").strip() if path.is_file() else ""
-
+        values = environment()
         return cls(
-            webhook=credential("FEISHU_WEBHOOK_URL", "feishu-webhook.txt"),
-            secret=credential("FEISHU_WEBHOOK_SECRET", "feishu-secret.txt"),
+            webhook=values.get("FEISHU_WEBHOOK_URL", "").strip(),
+            secret=values.get("FEISHU_WEBHOOK_SECRET", "").strip(),
+            state_dir=configured_path("ERP_FEISHU_DELIVERY_DIR", LOCAL_DIR / "feishu-delivery"),
         )
 
     def validate(self):

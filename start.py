@@ -15,12 +15,22 @@ GRACE_SECONDS = 30
 
 
 def arguments(argv=None):
+    sys.path.insert(0, str(ROOT / "backend"))
+    from app.core.environment import environment, project_path
+
+    values = environment()
     parser = argparse.ArgumentParser(description="统一启动网页和飞书问数，Ctrl+C 一起停止")
-    parser.add_argument("--port", type=int, default=8001, help="网页端口，默认8001")
-    parser.add_argument("--report-path", type=Path, help="两个服务共用的快照文件")
+    parser.add_argument("--port", type=int, default=values.get("ERP_PORT", "8001"))
+    parser.add_argument("--host", default=values.get("ERP_HOST", "127.0.0.1"))
     parser.add_argument(
-        "--config", type=Path, default=ROOT / ".local/feishu-app.json", help="飞书本地配置文件"
+        "--report-path",
+        type=Path,
+        default=(
+            project_path(values["ERP_REPORT_PATH"]) if values.get("ERP_REPORT_PATH") else None
+        ),
+        help="两个服务共用的快照文件",
     )
+    parser.add_argument("--config", type=Path, help="显式兼容旧飞书JSON；默认只读取.env")
     parser.add_argument("--check", action="store_true", help="仅离线检查，不启动或连接服务")
     parser.add_argument("--_service", choices=("web", "feishu"), help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -42,17 +52,20 @@ def arguments(argv=None):
     if args.report_path is None or not args.report_path.is_file():
         parser.error("未找到分析快照，请通过 --report-path 指定已有快照")
     args.report_path = args.report_path.resolve()
-    args.config = args.config.resolve()
+    args.config = args.config.resolve() if args.config else None
     return args
 
 
 def preflight(args):
     """Local checks only; no ERP/assistant SQL, model call or Feishu request."""
+    from app.core.environment import configured_path
     from app.core.reports import load_report
     from app.integrations.feishu_app import DEFAULT_STATE, load_config
     from app.notifications.feishu import delivery_lock
+    from app.semantic.context import signing_key
 
     load_config(args.config).require_authorized_groups()
+    signing_key()
     try:
         report = load_report(args.report_path)
     except (OSError, ValueError):
@@ -65,13 +78,13 @@ def preflight(args):
         if os.name == "nt":
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
         try:
-            probe.bind(("127.0.0.1", args.port))
+            probe.bind((getattr(args, "host", "127.0.0.1"), args.port))
         except OSError:
             raise ValueError(
                 f"端口 {args.port} 已被占用或不可用，请先停止原服务或更换端口。"
             ) from None
     # Probe the existing bot's lock without deleting or altering its task state.
-    with delivery_lock(DEFAULT_STATE / "connection.lock"):
+    with delivery_lock(configured_path("ERP_FEISHU_STATE_DIR", DEFAULT_STATE) / "connection.lock"):
         pass
 
 
@@ -84,11 +97,11 @@ def child_command(args, service):
         service,
         "--report-path",
         str(args.report_path),
-        "--config",
-        str(args.config),
         "--port",
         str(args.port),
-    ]
+        "--host",
+        getattr(args, "host", "127.0.0.1"),
+    ] + (["--config", str(args.config)] if args.config else [])
 
 
 def run_child(args):
@@ -98,10 +111,19 @@ def run_child(args):
         signal.signal(signal.SIGBREAK, lambda *_: signal.raise_signal(signal.SIGINT))
     if args._service == "web":
         script = ROOT / "scripts/start_backend.py"
-        values = ["--report-path", str(args.report_path), "--port", str(args.port)]
+        values = [
+            "--report-path",
+            str(args.report_path),
+            "--port",
+            str(args.port),
+            "--host",
+            getattr(args, "host", "127.0.0.1"),
+        ]
     else:
         script = ROOT / "scripts/start_feishu_bot.py"
-        values = ["--sales", "--report-path", str(args.report_path), "--config", str(args.config)]
+        values = ["--sales", "--report-path", str(args.report_path)]
+        if args.config:
+            values += ["--config", str(args.config)]
     sys.argv = [str(script), *values]
     runpy.run_path(str(script), run_name="__main__")
 
@@ -161,7 +183,10 @@ def supervise(args):
             )
             children.append((name, child))
             print(f"已启动{name}进程，PID={child.pid}。", flush=True)
-        print(f"网页地址：http://127.0.0.1:{args.port}；服务就绪以各自日志为准。", flush=True)
+        print(
+            f"网页监听：http://{getattr(args, 'host', '127.0.0.1')}:{args.port}；"
+            "服务就绪以各自日志为准。", flush=True,
+        )
         print("按 Ctrl+C 一起停止网页和飞书。", flush=True)
         while True:
             for name, child in children:
@@ -200,7 +225,9 @@ def main(argv=None):
         print("缺少依赖，请先执行 uv sync --locked。", flush=True)
         return 1
     try:
-        with delivery_lock(ROOT / ".local/services.lock"):
+        from app.core.environment import configured_path
+
+        with delivery_lock(configured_path("ERP_SERVICES_LOCK", ROOT / ".local/services.lock")):
             preflight(args)
             if args.check:
                 print("离线检查通过；未启动服务，未连接数据库、模型或飞书。", flush=True)

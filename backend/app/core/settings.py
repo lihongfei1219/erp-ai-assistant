@@ -1,6 +1,7 @@
-import os
 from dataclasses import dataclass
 from pathlib import Path
+
+from app.core.environment import environment, project_path
 
 LOCAL_SOURCE_ODBC = (
     "DRIVER={ODBC Driver 18 for SQL Server};SERVER=lpc:.\\ERPLOCAL;"
@@ -14,11 +15,11 @@ class ApiSettings:
 
     @classmethod
     def from_env(cls):
-        value = os.environ.get("ERP_REPORT_PATH")
+        value = environment().get("ERP_REPORT_PATH")
         return cls(
-            report_path=Path(value) if value else None,
+            report_path=project_path(value) if value else None,
         )
 
 
 def source_odbc() -> str:
-    return os.environ.get("ERP_SOURCE_ODBC", LOCAL_SOURCE_ODBC)
+    return environment().get("ERP_SOURCE_ODBC") or LOCAL_SOURCE_ODBC

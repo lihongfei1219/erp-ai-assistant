@@ -6,22 +6,20 @@
 
 在 [飞书开放平台](https://open.feishu.cn/app) 创建企业自建应用，建议命名“ERP 经营助手”，添加“机器人”能力。
 
-在“凭证与基础信息”复制 App ID、App Secret，填写项目 `.local/feishu-app.json`：
+在“凭证与基础信息”复制 App ID、App Secret，填写项目根目录 `.env`：
 
-```json
-{
-  "app_id": "cli_替换为应用ID",
-  "app_secret": "替换为应用密钥",
-  "tenant_key": "",
-  "allowed_chat_ids": [],
-  "allowed_user_open_ids": [],
-  "user_access_mode": "allowlist"
-}
+```dotenv
+FEISHU_APP_ID='cli_替换为应用ID'
+FEISHU_APP_SECRET='替换为应用密钥'
+FEISHU_TENANT_KEY=''
+FEISHU_ALLOWED_CHAT_IDS=''
+FEISHU_ALLOWED_USER_OPEN_IDS=''
+FEISHU_USER_ACCESS_MODE='allowlist'
 ```
 
-此文件不随Git代码或uv依赖安装恢复。缺少配置且没有备份时，可复制 `backend/config/feishu-app.example.json` 到上述路径并填写，不要覆盖已有凭据。UTF-8 保存，保留双引号；密钥不用发到聊天中。空模板不能用于连接或接收消息。
+此文件不随Git代码或uv依赖安装恢复。缺少配置时，复制根目录`.env.example`为`.env`并填写，不要覆盖已有凭据。UTF-8保存；多个群或用户ID用逗号分隔。密钥不用发到聊天中，空模板不能用于连接或接收消息。
 
-也支持 `FEISHU_APP_ID`、`FEISHU_APP_SECRET` 进程环境变量，优先于文件；群、用户和租户授权仍在文件配置。`.env` 不自动读取。配置修改后重启连接进程。
+以上所有字段都支持进程环境变量，优先于`.env`。默认不再读取`.local/feishu-app.json`；旧安装执行`uv run python scripts/migrate_env.py --apply`迁移，或显式用`--config`兼容旧JSON。配置修改后重启连接进程。
 
 在项目根目录执行离线检查（不会请求飞书）：
 
@@ -79,11 +77,11 @@ uv run python .\scripts\start_feishu_bot.py --discover
 ]
 ```
 
-核对这些确实是刚才的目标内部群和运营人员，将租户标识填入 `tenant_key`，群 ID 填入 `allowed_chat_ids` 数组，用户 ID 填入 `allowed_user_open_ids` 数组。发现记录不会自动授权。当前一个应用配置一个租户，授权用户可在任一授权群中进行连接测试。
+核对这些确实是刚才的目标内部群和运营人员，在`.env`将租户标识填入`FEISHU_TENANT_KEY`，群ID填入`FEISHU_ALLOWED_CHAT_IDS`，用户ID填入`FEISHU_ALLOWED_USER_OPEN_IDS`；多个ID用逗号分隔。发现记录不会自动授权。当前一个应用配置一个租户，授权用户可在任一授权群中进行连接测试。
 
 文件只保存最多 20 组标识，不保存聊天正文。获取其他运营人员的标识时，让其在同一目标群内再次 @机器人。
 
-如需让授权群全员使用，将 `user_access_mode` 改为 `"all_group_members"`。此模式只开放 `allowed_chat_ids` 中的群，仍校验应用与租户；群内同租户用户不必逐个填入 `allowed_user_open_ids`，该列表可以为空或保留供切回白名单模式使用。追问、编号选择和任务状态仍按应用／租户／群／用户隔离，不共享个人上下文。群内回复可被群成员看到，因此应只授权允许查看当前业务数据的群。
+如需让授权群全员使用，在`.env`设置`FEISHU_USER_ACCESS_MODE='all_group_members'`。此模式只开放`FEISHU_ALLOWED_CHAT_IDS`中的群，仍校验应用与租户；群内同租户用户不必逐个填入`FEISHU_ALLOWED_USER_OPEN_IDS`，该列表可以为空或保留供切回白名单模式使用。追问、编号选择和任务状态仍按应用／租户／群／用户隔离，不共享个人上下文。群内回复可被群成员看到，因此应只授权允许查看当前业务数据的群。
 
 省略此字段或设为 `"allowlist"` 时保持原有逐人授权，空用户列表不会自动开放全员。修改模式后重启机器人；改回白名单时，未获授权用户的待处理任务和待发结果也会被拦截。每次提问仍需真正 @机器人，不处理私聊和普通群消息。
 
@@ -112,7 +110,7 @@ uv run python .\scripts\start_feishu_bot.py --listen
 
 | 现象 | 检查 |
 |---|---|
-| 配置检查失败 | JSON 格式、App ID 是否 cli_ 开头、密钥是否非空；检查同名环境变量是否覆盖文件 |
+| 配置检查失败 | .env格式、FEISHU_APP_ID是否cli_开头、密钥是否非空；检查同名环境变量是否覆盖文件 |
 | 凭据验证失败 | App ID／Secret 配对、机器人能力、网络访问；应用是否处于可用状态 |
 | 无法保存长连接订阅 | 发现进程是否仍运行、是否出现已建立提示、后台所选应用是否与本机一致 |
 | 群里看不到机器人 | 机器人能力、可见范围、版本发布、群类型和企业管理员策略 |

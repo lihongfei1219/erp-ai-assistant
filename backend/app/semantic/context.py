@@ -10,22 +10,30 @@ from pathlib import Path
 
 from app.analysis.sales_query import QueryUnavailable
 from app.capabilities.view import capability_view
+from app.core.environment import environment
 from app.semantic.catalog import load_catalog
 from app.semantic.schemas import SemanticContext
 
 
 def signing_key(principal: str = "local-workspace", *, path: Path | None = None) -> str:
     """Server-only persistent key; the local workspace does not require a login credential."""
-    path = path or Path(__file__).resolve().parents[3] / ".local" / "semantic-context.key"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with path.open("xb") as stream:
-            stream.write(secrets.token_bytes(32))
-    except FileExistsError:
-        pass
-    secret = path.read_bytes()
+    if path is not None:  # Explicit legacy path for compatibility/tests, never auto-discovered.
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with path.open("xb") as stream:
+                stream.write(secrets.token_bytes(32))
+        except FileExistsError:
+            pass
+        secret = path.read_bytes()
+    else:
+        try:
+            secret = bytes.fromhex(environment().get("ERP_CONTEXT_SIGNING_KEY", ""))
+        except ValueError:
+            raise QueryUnavailable(
+                ".env 中 ERP_CONTEXT_SIGNING_KEY 必须是32字节十六进制密钥。"
+            ) from None
     if len(secret) != 32:
-        raise QueryUnavailable("会话签名配置无效，请联系管理员。")
+        raise QueryUnavailable("请在 .env 配置 ERP_CONTEXT_SIGNING_KEY（32字节十六进制密钥）。")
     return hmac.new(
         secret, ("semantic-principal:" + principal).encode(), hashlib.sha256
     ).hexdigest()

@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,6 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError
 
+from app.core.environment import environment
 from app.notifications.feishu import LOCAL_DIR, delivery_lock, write_state
 
 DEFAULT_CONFIG = LOCAL_DIR / "feishu-app.json"
@@ -53,24 +53,32 @@ class AppConfig(BaseModel):
             raise AppConfigError("allowed_user_open_ids 应填写 ou_ 开头的用户 open_id")
 
 
-def load_config(path: Path = DEFAULT_CONFIG) -> AppConfig:
+def load_config(path: Path | None = None) -> AppConfig:
     try:
-        data = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else {}
+        data = json.loads(path.read_text(encoding="utf-8-sig")) if path and path.is_file() else {}
         if not isinstance(data, dict):
             raise AppConfigError("应用配置应为 JSON 对象")
-        for name, key in [("FEISHU_APP_ID", "app_id"), ("FEISHU_APP_SECRET", "app_secret")]:
-            if name in os.environ:
-                data[key] = os.environ[name].strip()
+        values = environment()
+        for key in ("app_id", "app_secret", "tenant_key", "allowed_chat_ids",
+                    "allowed_user_open_ids", "user_access_mode"):
+            name = "FEISHU_" + key.upper()
+            if name not in values:
+                continue
+            value = values[name].strip()
+            data[key] = (
+                [part.strip() for part in value.split(",") if part.strip()]
+                if key in {"allowed_chat_ids", "allowed_user_open_ids"} else value
+            )
         config = AppConfig.model_validate(data)
     except (OSError, ValueError, ValidationError):
         # Pydantic errors may include input values; never print them for credential files.
-        raise AppConfigError("无法读取应用配置，请检查 JSON 格式、字段名称和文件权限") from None
-    if not path.is_file() and (
+        raise AppConfigError("无法读取应用配置，请检查 .env 或旧 JSON 的格式和权限") from None
+    if (path is None or not path.is_file()) and (
         not config.app_id or not config.app_secret.get_secret_value().strip()
     ):
         raise AppConfigError(
             "飞书配置文件不存在，且环境变量中的应用凭据不完整。"
-            "请恢复 .local/feishu-app.json（自定义路径使用 --config），"
+            "请填写根目录 .env 的 FEISHU_* 配置（旧 JSON 自定义路径使用 --config），"
             "或按 docs/feishu-app-setup.md 配置；启动网页不会自动启动飞书机器人。"
         )
     config.require_credentials()

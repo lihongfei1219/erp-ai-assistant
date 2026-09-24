@@ -2,12 +2,13 @@
 
 import hashlib
 import json
-import os
 import uuid
 from contextlib import contextmanager
 from datetime import timedelta
 
 import pyodbc
+
+from app.core.environment import environment
 
 ASSISTANT_DATABASE = "ERP_AI_Assistant"
 DEFAULT_ASSISTANT_ODBC = (
@@ -61,7 +62,8 @@ class SqlJobStore:
     @contextmanager
     def connection(self):
         connection = pyodbc.connect(
-            os.getenv("ERP_ASSISTANT_ODBC", DEFAULT_ASSISTANT_ODBC), timeout=5, autocommit=False
+            environment().get("ERP_ASSISTANT_ODBC") or DEFAULT_ASSISTANT_ODBC,
+            timeout=5, autocommit=False,
         )
         try:
             connection.timeout = 15

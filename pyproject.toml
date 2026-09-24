@@ -21,6 +21,7 @@ dependencies = [
     "sqlalchemy==2.0.54",
     "starlette==1.6.0",
     "uvicorn==0.53.0",
+    "python-dotenv==1.2.3",
 ]
 
 [dependency-groups]

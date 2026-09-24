@@ -5,8 +5,8 @@ import logging
 import threading
 from pathlib import Path
 
+from app.core.environment import configured_path, environment, project_path
 from app.integrations.feishu_app import (
-    DEFAULT_CONFIG,
     DEFAULT_STATE,
     AppConfigError,
     ConnectionBot,
@@ -33,8 +33,10 @@ class SafeSdkLog(logging.Handler):
 
 
 def main(argv=None) -> int:
+    values = environment()
+    state_dir = configured_path("ERP_FEISHU_STATE_DIR", DEFAULT_STATE)
     parser = argparse.ArgumentParser(description="飞书应用机器人接入；默认只检查本地配置")
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
+    parser.add_argument("--config", type=Path, help="显式兼容旧JSON；默认只读取.env")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="离线检查，不连接飞书")
     mode.add_argument("--probe", action="store_true", help="验证凭据及机器人身份，不发消息")
@@ -46,7 +48,9 @@ def main(argv=None) -> int:
     parser.add_argument(
         "--report-path",
         type=Path,
-        default=(DEFAULT_STATE.parent / "reports/platform-four-domain-20260922.json")
+        default=project_path(values["ERP_REPORT_PATH"])
+        if values.get("ERP_REPORT_PATH")
+        else (DEFAULT_STATE.parent / "reports/platform-four-domain-20260922.json")
         if (DEFAULT_STATE.parent / "reports/platform-four-domain-20260922.json").is_file()
         else DEFAULT_STATE.parent / "reports/platform-operating-20260916.json",
     )
@@ -117,12 +121,12 @@ def main(argv=None) -> int:
             )
             print("销售问数模式已就绪，任务保存在独立助手数据库。", flush=True)
         else:
-            bot = ConnectionBot(config, bot_id, DEFAULT_STATE, discover=args.discover)
+            bot = ConnectionBot(config, bot_id, state_dir, discover=args.discover)
 
         def receive(data):
             result = bot.accept(data)
             if result == "discovered":
-                print("已发现群和用户标识：.local/feishu-app/discovery.json（未回复）", flush=True)
+                print(f"已发现群和用户标识：{state_dir / 'discovery.json'}（未回复）", flush=True)
             elif result == "queued":
                 print("授权消息已入队。", flush=True)
             elif result == "busy":
@@ -151,7 +155,7 @@ def main(argv=None) -> int:
             .build()
         )
         # One connection process per app/local state directory; no competing consumers.
-        with delivery_lock(DEFAULT_STATE / "connection.lock"):
+        with delivery_lock(state_dir / "connection.lock"):
             if store is not None:
                 store.recover()
             if args.listen or args.sales:

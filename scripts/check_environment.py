@@ -19,6 +19,7 @@ def main():
         "pyodbc",
         "sqlalchemy",
         "psutil",
+        "dotenv",
         "pydantic",
         "pydantic_ai",
         "httpx",
@@ -65,6 +66,11 @@ def main():
             "platform-sales-20260916.json",
         )
     ]
+    from app.core.environment import environment, project_path
+
+    configured_report = environment().get("ERP_REPORT_PATH")
+    if configured_report:
+        reports = [project_path(configured_report)]
     if not any(path.is_file() for path in reports):
         print("[NOTICE] Default data snapshot missing. Restore it or start with --report-path.")
     elif not reports[0].is_file():
