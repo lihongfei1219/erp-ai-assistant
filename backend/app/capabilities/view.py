@@ -77,10 +77,15 @@ def capability_view(report):
             "operations": sorted(OPERATIONS[domain]) if executable else [],
             "capabilities": [
                 {
-                    "id": c.id, "kind": c.kind, "operation": c.operation,
-                    "metrics": list(c.metrics), "semantic_metrics": list(c.semantic_metrics),
-                    "targets": list(c.targets), "dimensions": list(c.dimensions),
-                    "ordered": c.ordered, "limited": c.limited,
+                    "id": c.id,
+                    "kind": c.kind,
+                    "operation": c.operation,
+                    "metrics": list(c.metrics),
+                    "semantic_metrics": list(c.semantic_metrics),
+                    "targets": list(c.targets),
+                    "dimensions": list(c.dimensions),
+                    "ordered": c.ordered,
+                    "limited": c.limited,
                 }
                 for c in REGISTRY.values()
                 if c.domain == domain
@@ -95,6 +100,17 @@ def capability_view(report):
             item.update(available_start=start.isoformat(), available_end_exclusive=end.isoformat())
         if executable and domain == "inventory":
             item["snapshot_as_of"] = report.operations.inventory.as_of.isoformat()
+        if executable and domain == "shipping":
+            from app.analysis.growth import coverage
+
+            intervals = coverage(report)
+            item["growth_coverage"] = [
+                {"start": start.isoformat(), "end_exclusive": end.isoformat()}
+                for start, end in sorted(intervals)
+            ]
+            if not intervals:
+                item["operations"] = [op for op in item["operations"] if op != "growth"]
+                item["capabilities"] = [c for c in item["capabilities"] if c["kind"] != "growth"]
         item["filter_fields"] = list(FILTER_FIELDS[domain]) if item["executable"] else []
         domains[domain] = item
     return {

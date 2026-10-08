@@ -47,6 +47,7 @@ def with_operations(report):
         all_buyers=True,
         returns=facts("returns"),
         shipping=facts("shipping"),
+        shipping_history=growth_history(),
         inventory=dict(
             as_of=report.metadata.source_as_of,
             control_record_count=1,
@@ -64,3 +65,17 @@ def with_operations(report):
         ),
     )
     return report.model_copy(update={"operations": operations})
+
+
+def growth_history():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
+    from tests.growth_fixtures import part
+
+    return [
+        part("2026-08-01", "2026-09-01", [("A", "100"), ("B", "20"), ("C", "40")], 100),
+        part("2026-07-01", "2026-08-01", [("A", "60"), ("B", "40")], 200),
+        part("2025-08-01", "2025-09-01", [("A", "200")], 300),
+    ]

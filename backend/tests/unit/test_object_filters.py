@@ -94,7 +94,7 @@ def test_union_exclusion_and_cross_field_intersection(multi_report):
 
 
 @pytest.mark.parametrize("cap", list(REGISTRY.values()), ids=lambda c: c.id)
-def test_all_registered_analyses_accept_supported_product_filters(multi_report, cap):
+def test_all_registered_analyses_accept_supported_product_filters(multi_report, growth_report, cap):
     start, _ = date_bounds(multi_report, cap.domain)
     from datetime import timedelta
 
@@ -106,6 +106,10 @@ def test_all_registered_analyses_accept_supported_product_filters(multi_report, 
         end_date_exclusive=start + timedelta(days=1),
         filters=[condition("SKU-A" if cap.domain == "sales" else "A")],
     )
+    if cap.kind == "growth":
+        multi_report = growth_report
+        values.update(start_date="2026-08-01", end_date_exclusive="2026-09-01",
+                      filters=[condition("P")])
     if cap.kind == "comparison":
         values.update(
             comparison_start_date=start + timedelta(days=1),

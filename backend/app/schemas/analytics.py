@@ -17,14 +17,22 @@ AnalysisKind = Literal[
     "anomalies",
     "list",
     "existence",
+    "growth",
 ]
 BusinessDomain = Literal["sales", "returns", "shipping", "inventory"]
+
+
+class ProductVariant(StrictModel):
+    specification: str = Field(min_length=1, max_length=200)
+    manufacturer: str = Field(min_length=1, max_length=200)
+    unit: str = Field(min_length=1, max_length=200)
 
 
 class ObjectFilter(StrictModel):
     field: Literal["product", "buyer"]
     operator: Literal["include", "exclude", "equal"] = "equal"
     code: str = Field(min_length=1, max_length=200, pattern=r"\S")
+    variant: ProductVariant | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class AnalysisStep(StrictModel):
@@ -39,9 +47,18 @@ class AnalysisStep(StrictModel):
     comparison_start_date: date | None = None
     comparison_end_date_exclusive: date | None = None
     filters: list[ObjectFilter] = Field(default_factory=list, max_length=10)
+    growth_basis: Literal["both", "previous", "year_over_year"] = "both"
+    growth_direction: Literal["both", "increase", "decrease"] = "both"
+    growth_sort: Literal["delta", "rate"] = "delta"
 
     @model_validator(mode="after")
     def check_intervals(self):
+        if any(
+            f.variant is not None
+            and (self.kind != "growth" or f.field != "product" or f.operator == "exclude")
+            for f in self.filters
+        ):
+            raise ValueError("规格限定仅用于品种变化中的商品包含条件")
         return validate_step(self)
 
 

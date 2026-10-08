@@ -11,7 +11,7 @@ from app.schemas.analytics import AnalysisResult, AnalysisStep
 def build_chart(result: AnalysisResult, step: AnalysisStep, currency: str) -> dict | None:
     if (
         not result.rows
-        or step.kind in {"summary", "list", "existence"}
+        or step.kind in {"summary", "list", "existence", "growth"}
         or step.metric in {"quantity", "stock"}
     ):
         return None

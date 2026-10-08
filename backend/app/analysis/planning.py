@@ -45,6 +45,7 @@ def describe_interpretation(
                 "buyer_ranking": "客户排行",
                 "list": "明细",
                 "existence": "有无记录",
+                "growth": "品种变化与客户贡献",
             }[step.kind]
             detail = f"{label}{operation}：{period}；按{metric}统计"
             if step.kind.endswith("ranking"):

@@ -32,6 +32,9 @@ def entity_directory(report, domain, field):
         facts = getattr(report.operations, domain, None) if report.operations else None
         documents = facts.documents if facts else []
         statuses = facts.included_statuses if facts else []
+        if domain == "shipping" and report.operations:
+            documents = [*documents, *(doc for part in report.operations.shipping_history
+                                      for doc in part.documents)]
     for doc in documents:
         if doc.status not in statuses or (
             not scope.all_buyers and doc.buyer_code not in scope.buyer_codes

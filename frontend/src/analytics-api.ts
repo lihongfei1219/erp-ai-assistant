@@ -6,7 +6,8 @@ export type AnalysisKind =
   | "comparison"
   | "anomalies"
   | "list"
-  | "existence";
+  | "existence"
+  | "growth";
 export type BusinessDomain = "sales" | "returns" | "shipping" | "inventory";
 export interface AnalysisStep {
   domain?: BusinessDomain;
@@ -19,17 +20,32 @@ export interface AnalysisStep {
   dimension?: "product" | "buyer";
   comparison_start_date?: string;
   comparison_end_date_exclusive?: string;
+  growth_basis?: "both" | "previous" | "year_over_year";
+  growth_direction?: "both" | "increase" | "decrease";
+  growth_sort?: "delta" | "rate";
   filters?: {
     field: "product" | "buyer";
     operator: "include" | "exclude" | "equal";
     code: string;
+    variant?: {
+      specification: string;
+      manufacturer: string;
+      unit: string;
+    } | null;
   }[];
 }
 export interface AnalysisPlan {
   steps: AnalysisStep[];
 }
 export interface AnalysisCatalog {
-  semantic_domains?: Record<string, { label: string; executable: boolean }>;
+  semantic_domains?: Record<
+    string,
+    {
+      label: string;
+      executable: boolean;
+      growth_coverage?: { start: string; end_exclusive: string }[];
+    }
+  >;
   available_start: string;
   available_end_exclusive: string;
   model_enabled: boolean;
@@ -46,7 +62,7 @@ export interface AnalysisResult {
   title: string;
   columns: Record<string, string>;
   rows: Record<string, string | number | number[] | null>[];
-  totals: Record<string, string | number | null>;
+  totals: Record<string, unknown>;
   findings: string[];
   notes: string[];
   chart: Figure | null;

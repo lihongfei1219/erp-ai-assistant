@@ -30,6 +30,11 @@ def domain_dates(report, domain):
 
 
 def validate_operation_step(report, step):
+    if step.kind == "growth":
+        from app.analysis.growth import validate_growth
+
+        validate_growth(report, step)
+        return
     start, end = domain_dates(report, step.domain)
     if step.domain == "inventory":
         if (step.start_date, step.end_date_exclusive) != (start, end):
@@ -58,8 +63,7 @@ def validate_operations(report):
     tz = ZoneInfo(
         report.operating.policy.business_timezone if report.operating else "Asia/Shanghai"
     )
-    for domain in ("returns", "shipping"):
-        events = getattr(facts, domain)
+    for events in (facts.returns, facts.shipping, *facts.shipping_history):
         if events and any(
             not events.start <= doc.occurred_at.astimezone(tz).date() < events.end_exclusive
             for doc in events.documents
@@ -163,6 +167,10 @@ def _trend(records, step):
 
 
 def execute_operation(report, step):
+    if step.kind == "growth":
+        from app.analysis.growth import execute_growth
+
+        return execute_growth(report, step)
     facts = getattr(report.operations, step.domain)
     label = DOMAIN_LABELS[step.domain]
     tz = ZoneInfo(report.operating.policy.business_timezone)

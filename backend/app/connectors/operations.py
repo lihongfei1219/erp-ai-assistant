@@ -1,6 +1,7 @@
 """Bounded fixed SELECTs for the verified QY business tables. ERP source is read-only."""
 
 from collections import defaultdict
+from datetime import timedelta
 from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
@@ -10,7 +11,7 @@ from app.connectors.qy import SourceDataError, _query
 from app.schemas.operations import DocumentFacts, InventoryFacts, OperationsSnapshot
 
 
-def _read_documents(connection, report, domain, max_documents, max_lines):
+def _read_documents(connection, report, domain, max_documents, max_lines, *, comparison=False):
     returns = domain == "returns"
     header, detail = ("XSTHDH", "XSTHDB") if returns else ("CKFHQRH", "CKFHQRB")
     date_field = "CJRQ" if returns else "SHRQ"
@@ -86,6 +87,7 @@ def _read_documents(connection, report, domain, max_documents, max_lines):
         SELECT TOP ({max_lines + 1}) b.DjLsh document_id,b.DjBth line_id,
         RTRIM(b.SPBM) product_code,RTRIM(b.SPMC) product_name,
         RTRIM(b.DW) unit,b.SL quantity,b.JE amount
+        {", RTRIM(b.GG) specification, RTRIM(b.SCCS) manufacturer" if comparison else ""}
         FROM dbo.{detail} b JOIN dbo.{header} h ON h.DjLsh=b.DjLsh
         LEFT JOIN dbo.XSDDH s ON s.BJDH=h.{order_field}
         WHERE {predicate} ORDER BY b.DjLsh,b.DjBth
@@ -155,6 +157,7 @@ def _read_documents(connection, report, domain, max_documents, max_lines):
         value["lines"] = by_id[value["document_id"]]
         documents.append(value)
     return DocumentFacts(
+        comparison_ready=comparison,
         start=window.start,
         end_exclusive=window.end,
         time_basis="已完成退货单创建日期" if returns else "已确认销售出库确认日期",
@@ -226,3 +229,42 @@ def read_operations(engine, report, *, max_documents=50_000, max_lines=200_000):
         )
     except ValidationError:
         raise SourceDataError("业务事实校验或主明细／数量对账未通过，未发布新快照") from None
+
+
+def read_shipping_history(engine, report, windows, *, max_documents=50_000, max_lines=200_000):
+    """Read explicit bounded partitions; the caller publishes a new snapshot only after all pass."""
+    if any(type(n) is not int or n <= 0 for n in (max_documents, max_lines)):
+        raise ValueError("读取上限必须为正整数")
+    if not report.operations or not report.operations.shipping:
+        raise SourceDataError("请先加载销售出库快照")
+    if not windows or len(windows) > 36:
+        raise ValueError("历史出库分区须为1至36段")
+    facts = []
+    with engine.connect() as connection, connection.begin():
+        identity = connection.execute(
+            text("SELECT DB_NAME(),is_read_only FROM sys.databases WHERE database_id=DB_ID()")
+        ).one()
+        if identity[0] != "ERP_Local" or not identity[1]:
+            raise SourceDataError("历史事实仅从只读 ERP_Local 提取")
+        for window in windows:
+            from app.schemas.sales import AnalysisWindow
+
+            window = AnalysisWindow.model_validate(window.model_dump())
+            primary = report.operations.shipping
+            is_primary = (window.start, window.end) == (primary.start, primary.end_exclusive)
+            cutoff = report.metadata.source_as_of.date()
+            if window.end > cutoff + timedelta(days=int(is_primary)):
+                raise SourceDataError("历史分区须为备份截至日前的完整日期")
+            selected = report.model_copy(
+                update={"metadata": report.metadata.model_copy(update={"window": window})}
+            )
+            part = _read_documents(
+                connection, selected, "shipping", max_documents, max_lines, comparison=True
+            )
+            facts.append(part)
+            if (
+                sum(p.control_document_count for p in facts) > max_documents
+                or sum(p.control_line_count for p in facts) > max_lines
+            ):
+                raise SourceDataError("历史分区合计超过加载预算，请缩小范围")
+    return facts

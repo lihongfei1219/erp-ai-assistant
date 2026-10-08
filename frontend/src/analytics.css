@@ -263,3 +263,35 @@
     width: 100%;
   }
 }
+.growth-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 18px 0;
+}
+.growth-controls label {
+  display: grid;
+  gap: 8px;
+  min-width: 150px;
+}
+.growth-controls input,
+.growth-controls select {
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+.growth-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #0f172a99;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.growth-evidence {
+  width: min(1100px, 96vw);
+  max-height: 90vh;
+  overflow: auto;
+  padding: 24px;
+}

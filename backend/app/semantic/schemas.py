@@ -11,7 +11,15 @@ from app.semantic.catalog import load_catalog
 
 Domain = Literal["sales", "returns", "shipping", "inventory", "unknown"]
 Operation = Literal[
-    "summary", "trend", "ranking", "comparison", "anomalies", "list", "existence", "unknown"
+    "summary",
+    "trend",
+    "ranking",
+    "comparison",
+    "anomalies",
+    "list",
+    "existence",
+    "growth",
+    "unknown",
 ]
 Metric = Literal[
     "amount",
@@ -45,6 +53,9 @@ class SemanticIntent(StrictModel):
     metric: Metric | None = None
     time: str | None = Field(default=None, min_length=1, max_length=100)
     comparison_time: str | None = Field(default=None, min_length=1, max_length=100)
+    growth_basis: Literal["both", "previous", "year_over_year"] | None = None
+    growth_direction: Literal["both", "increase", "decrease"] | None = None
+    growth_sort: Literal["delta", "rate"] | None = None
     limit: int | None = Field(default=None, ge=1, le=MAX_ITEMS, strict=True)
     order: Literal["descending", "ascending"] | None = None
     scope: Literal["authorized", "all_buyers"] | None = None

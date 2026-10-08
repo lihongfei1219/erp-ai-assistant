@@ -122,8 +122,8 @@ test("comparison and failed request do not retain stale success", async ({
   await page.getByLabel("分析类型").selectOption("comparison");
   await page.getByLabel("开始日期", { exact: true }).fill("2026-09-08");
   await page.getByLabel("结束日期", { exact: true }).fill("2026-09-14");
-  await page.getByLabel("比较开始日期").fill("2026-09-01");
-  await page.getByLabel("比较结束日期").fill("2026-09-07");
+  await page.getByLabel("比较开始日期", { exact: true }).fill("2026-09-01");
+  await page.getByLabel("比较结束日期", { exact: true }).fill("2026-09-07");
   await page.getByRole("button", { name: "运行分析", exact: true }).click();
   await expect(page.getByTestId("analysis-results")).toContainText("-200.0000");
   await page.route("**/api/v1/analysis/run", (route) =>

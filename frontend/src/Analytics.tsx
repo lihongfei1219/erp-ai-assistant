@@ -15,6 +15,8 @@ import {
   type DialogueTurn,
 } from "./analytics-api";
 import "./analytics.css";
+import { GrowthPanel } from "./GrowthAnalysis";
+import { GrowthResult } from "./GrowthResult";
 
 export function Analytics() {
   const [catalog, setCatalog] = useState<AnalysisCatalog | null>(null);
@@ -171,7 +173,7 @@ export function Analytics() {
           setExpired("");
         } else {
           setResult(payload);
-          setConversationToken(null);
+          setConversationToken(payload.conversation_token ?? null);
           setDialogue(null);
           setExpired("");
         }
@@ -278,6 +280,15 @@ export function Analytics() {
 
   return (
     <div className="analytics-workspace">
+      {catalog && (
+        <GrowthPanel
+          coverage={catalog.semantic_domains?.shipping?.growth_coverage ?? []}
+          busy={busy}
+          onRun={(step) => {
+            void submit("run", { steps: [step] });
+          }}
+        />
+      )}
       <section className="panel analytics-input">
         <div className="analytics-title">
           <Sparkles size={22} />
@@ -566,115 +577,127 @@ export function Analytics() {
               <small>可在上方继续补充或调整分析要求。</small>
             </div>
           )}
-          {result.results.map((item, index) => (
-            <article
-              className="panel analytics-result"
-              key={`${result.run_id}-${index}`}
-            >
-              <h3>{item.title}</h3>
-              <p className="analytics-hint">
-                {result.plan.steps[index].start_date} 至{" "}
-                {shiftDay(result.plan.steps[index].end_date_exclusive, -1)} ·{" "}
-                {result.provenance.currency}
-              </p>
-              {result.plan.steps[index].comparison_start_date && (
+          {result.results.map((item, index) =>
+            item.kind === "growth" ? (
+              <GrowthResult
+                key={`${result.run_id}-${index}`}
+                result={item}
+                step={result.plan.steps[index]}
+                busy={busy}
+                onRun={(step) => {
+                  void submit("run", { steps: [step] });
+                }}
+              />
+            ) : (
+              <article
+                className="panel analytics-result"
+                key={`${result.run_id}-${index}`}
+              >
+                <h3>{item.title}</h3>
                 <p className="analytics-hint">
-                  比较期：{result.plan.steps[index].comparison_start_date} 至{" "}
-                  {shiftDay(
-                    result.plan.steps[index].comparison_end_date_exclusive!,
-                    -1,
-                  )}
+                  {result.plan.steps[index].start_date} 至{" "}
+                  {shiftDay(result.plan.steps[index].end_date_exclusive, -1)} ·{" "}
+                  {result.provenance.currency}
                 </p>
-              )}
-              <ul className="analytics-findings">
-                {item.findings.map((text, i) => (
-                  <li key={i}>{text}</li>
-                ))}
-              </ul>
-              {item.kind === "comparison" && (
-                <p>
-                  变化率：
-                  {item.totals.change_rate === null
-                    ? "无定义（比较期金额为零）"
-                    : `${(Number(item.totals.change_rate) * 100).toFixed(2)}%`}
-                  ；其余维度变化金额：{String(item.totals.other_delta)}
-                </p>
-              )}
-              {item.chart && <AnalysisChart figure={item.chart} />}
-              {item.rows.length ? (
-                <div className="table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        {Object.entries(item.columns).map(([key, label]) => (
-                          <th key={key}>{label}</th>
-                        ))}
-                        <th>依据</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {item.rows.map((row, ri) => (
-                        <tr key={ri}>
-                          {Object.keys(item.columns).map((key) => (
-                            <td key={key}>
-                              {row[key] === null
-                                ? "—"
-                                : String(row[key] ?? "—")}
-                            </td>
+                {result.plan.steps[index].comparison_start_date && (
+                  <p className="analytics-hint">
+                    比较期：{result.plan.steps[index].comparison_start_date} 至{" "}
+                    {shiftDay(
+                      result.plan.steps[index].comparison_end_date_exclusive!,
+                      -1,
+                    )}
+                  </p>
+                )}
+                <ul className="analytics-findings">
+                  {item.findings.map((text, i) => (
+                    <li key={i}>{text}</li>
+                  ))}
+                </ul>
+                {item.kind === "comparison" && (
+                  <p>
+                    变化率：
+                    {item.totals.change_rate === null
+                      ? "无定义（比较期金额为零）"
+                      : `${(Number(item.totals.change_rate) * 100).toFixed(2)}%`}
+                    ；其余维度变化金额：{String(item.totals.other_delta)}
+                  </p>
+                )}
+                {item.chart && <AnalysisChart figure={item.chart} />}
+                {item.rows.length ? (
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          {Object.entries(item.columns).map(([key, label]) => (
+                            <th key={key}>{label}</th>
                           ))}
-                          <td>
-                            {(!item.domain || item.domain === "sales") &&
-                            Array.isArray(row.evidence_ids) &&
-                            row.evidence_ids.length > 0 ? (
-                              <button
-                                className="analytics-evidence"
-                                onClick={() =>
-                                  setEvidence({
-                                    ids: row.evidence_ids as number[],
-                                    step: result.plan.steps[index],
-                                    ...(item.kind === "product_ranking" ||
-                                    (item.kind === "comparison" &&
-                                      result.plan.steps[index].dimension !==
-                                        "buyer")
-                                      ? { product_code: String(row.code) }
-                                      : {}),
-                                    ...(item.kind === "buyer_ranking" ||
-                                    (item.kind === "comparison" &&
-                                      result.plan.steps[index].dimension ===
-                                        "buyer")
-                                      ? { buyer_code: String(row.code) }
-                                      : {}),
-                                  })
-                                }
-                              >
-                                查看证据
-                              </button>
-                            ) : item.domain && item.domain !== "sales" ? (
-                              "见来源记录与业务单号"
-                            ) : (
-                              "无订单"
-                            )}
-                            <small>
-                              {Number(row.evidence_count) > 100
-                                ? `前100 / 共${row.evidence_count}张`
-                                : ""}
-                            </small>
-                          </td>
+                          <th>依据</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {item.rows.map((row, ri) => (
+                          <tr key={ri}>
+                            {Object.keys(item.columns).map((key) => (
+                              <td key={key}>
+                                {row[key] === null
+                                  ? "—"
+                                  : String(row[key] ?? "—")}
+                              </td>
+                            ))}
+                            <td>
+                              {(!item.domain || item.domain === "sales") &&
+                              Array.isArray(row.evidence_ids) &&
+                              row.evidence_ids.length > 0 ? (
+                                <button
+                                  className="analytics-evidence"
+                                  onClick={() =>
+                                    setEvidence({
+                                      ids: row.evidence_ids as number[],
+                                      step: result.plan.steps[index],
+                                      ...(item.kind === "product_ranking" ||
+                                      (item.kind === "comparison" &&
+                                        result.plan.steps[index].dimension !==
+                                          "buyer")
+                                        ? { product_code: String(row.code) }
+                                        : {}),
+                                      ...(item.kind === "buyer_ranking" ||
+                                      (item.kind === "comparison" &&
+                                        result.plan.steps[index].dimension ===
+                                          "buyer")
+                                        ? { buyer_code: String(row.code) }
+                                        : {}),
+                                    })
+                                  }
+                                >
+                                  查看证据
+                                </button>
+                              ) : item.domain && item.domain !== "sales" ? (
+                                "见来源记录与业务单号"
+                              ) : (
+                                "无订单"
+                              )}
+                              <small>
+                                {Number(row.evidence_count) > 100
+                                  ? `前100 / 共${row.evidence_count}张`
+                                  : ""}
+                              </small>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p>没有满足条件的记录。</p>
+                )}
+                <div className="analytics-hint">
+                  {item.notes.map((note, i) => (
+                    <p key={i}>{note}</p>
+                  ))}
                 </div>
-              ) : (
-                <p>没有满足条件的记录。</p>
-              )}
-              <div className="analytics-hint">
-                {item.notes.map((note, i) => (
-                  <p key={i}>{note}</p>
-                ))}
-              </div>
-            </article>
-          ))}
+              </article>
+            ),
+          )}
           <details className="panel analytics-input">
             <summary>统计口径与追溯信息</summary>
             <p>

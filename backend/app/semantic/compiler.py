@@ -52,7 +52,7 @@ def context_from_plan(plan: AnalysisPlan) -> SemanticContext:
                 operation=operation,
                 target=("buyer" if step.kind == "buyer_ranking" else step.dimension)
                 if step.domain == "sales"
-                or step.kind in {"product_ranking", "buyer_ranking", "comparison", "list"}
+                or step.kind in {"product_ranking", "buyer_ranking", "comparison", "list", "growth"}
                 else None,
                 metric=step.metric,
                 time=canonical_period(step.start_date, step.end_date_exclusive),
@@ -62,6 +62,9 @@ def context_from_plan(plan: AnalysisPlan) -> SemanticContext:
                 if step.kind == "comparison"
                 else None,
                 limit=step.top_n,
+                growth_basis=step.growth_basis if step.kind == "growth" else None,
+                growth_direction=step.growth_direction if step.kind == "growth" else None,
+                growth_sort=step.growth_sort if step.kind == "growth" else None,
                 order=step.order,
                 id=_new_id("goal"),
                 filters=[
@@ -827,6 +830,17 @@ def compile_request(
     if any(i.order == "ascending" and i.operation != "ranking" for i in intents):
         item = next(i for i in intents if i.order == "ascending" and i.operation != "ranking")
         return stop("unsupported", "当前只有排行接受排序方向。", ["order"], intent_id=item.id)
+    if any(
+        i.operation != "growth"
+        and any(
+            getattr(i, field) is not None
+            for field in ("growth_basis", "growth_direction", "growth_sort")
+        )
+        for i in intents
+    ):
+        return stop(
+            "clarify", "问题包含同比环比或增减条件，请明确是否分析品种变化。", ["operation"]
+        )
     if invalid_date_expression:
         return stop("clarify", "日期无效或范围不明确，请提供有效的起止日期。", ["time"])
     steps, resolved = [], []
@@ -865,7 +879,11 @@ def compile_request(
                 ["operation"],
                 intent_id=item.id,
             )
-        metric = item.metric or catalog["domains"][item.domain]["default_metric"]
+        metric = item.metric or (
+            "amount"
+            if item.operation == "growth"
+            else catalog["domains"][item.domain]["default_metric"]
+        )
         limit = item.limit or catalog["defaults"]["ranking_limit"]
         kind = (
             f"{item.target or 'product'}_ranking" if item.operation == "ranking" else item.operation
@@ -884,7 +902,23 @@ def compile_request(
         )
         if kind == "list" and item.domain != "sales":
             values["dimension"] = item.target or "product"
-        if kind in {"product_ranking", "buyer_ranking", "comparison", "list"}:
+        if kind == "growth":
+            values.update(
+                dimension=item.target or "product",
+                growth_basis=item.growth_basis or "both",
+                growth_direction=item.growth_direction or "both",
+                growth_sort=item.growth_sort or "delta",
+            )
+            if values["dimension"] == "buyer" and not any(
+                f.field == "product" and f.operator != "exclude" for f in item.filters
+            ):
+                return stop(
+                    "clarify",
+                    "请明确要追溯客户贡献的品种名称或编码。",
+                    ["product"],
+                    intent_id=item.id,
+                )
+        if kind in {"product_ranking", "buyer_ranking", "comparison", "list", "growth"}:
             values["top_n"] = limit
         elif item.limit is not None and (
             request.mode == "new"
@@ -950,7 +984,7 @@ def compile_request(
                     "comparison_time": comparison_time,
                     "metric": metric,
                     "limit": limit
-                    if kind.endswith("ranking") or kind in {"comparison", "list"}
+                    if kind.endswith("ranking") or kind in {"comparison", "list", "growth"}
                     else None,
                     "target": item.target or "product" if kind.endswith("ranking") else item.target,
                 }

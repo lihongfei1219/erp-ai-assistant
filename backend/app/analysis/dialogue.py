@@ -57,6 +57,7 @@ OPERATIONS = {
     "anomalies": "日波动",
     "list": "明细",
     "existence": "是否发生",
+    "growth": "品种变化与客户贡献",
 }
 METRICS = {
     "amount": "有效订单金额",
@@ -79,6 +80,9 @@ FILTERS = {
     "other": "其他",
 }
 FIELD_VALUES = {
+    "growth_basis": {"both": "上期及去年同期", "previous": "上期", "year_over_year": "去年同期"},
+    "growth_direction": {"both": "增长与下降", "increase": "增长", "decrease": "下降"},
+    "growth_sort": {"delta": "增减额／量", "rate": "变化率"},
     "domain": DOMAINS,
     "operation": OPERATIONS,
     "metric": METRICS,
@@ -87,6 +91,9 @@ FIELD_VALUES = {
     "scope": {"authorized": "当前授权范围", "all_buyers": "全平台"},
 }
 FIELD_LABELS = {
+    "growth_basis": "比较基准",
+    "growth_direction": "变化方向",
+    "growth_sort": "变化排序",
     "domain": "业务",
     "operation": "分析目标",
     "target": "对象",
@@ -120,13 +127,32 @@ def _target_label(target):
 
 def _metric_label(item, metric):
     if item.domain in {"returns", "shipping"} and metric in {"amount", "orders", "quantity"}:
-        return DOMAINS[item.domain] + {
-            "amount": "单据金额", "orders": "单据数", "quantity": "商品数量",
-        }[metric]
+        return (
+            DOMAINS[item.domain]
+            + {
+                "amount": "单据金额",
+                "orders": "单据数",
+                "quantity": "商品数量",
+            }[metric]
+        )
     return METRICS.get(metric, "指标待明确")
 
 
 def _dates_for(report, item):
+    if item.domain == "shipping" and item.operation == "growth":
+        from app.analysis.growth import coverage
+
+        intervals = sorted(coverage(report), reverse=True)
+        if intervals:
+            start, end = intervals[0]
+            for begin, until in intervals[1:]:
+                if until == start:
+                    start = begin
+                else:
+                    break
+            return start, end
+        start, _ = available_dates(report)
+        return start, start
     if item.domain != "sales" and item.domain in executable_domains(report):
         return domain_dates(report, item.domain)
     return available_dates(report)
@@ -279,6 +305,15 @@ def _build_guidance(resolution, report, today):
         nonlocal start, end
         start, end = _dates_for(report, item)
         offer("自己选择日期", action="date_range")
+        if item.operation == "growth":
+            from app.analysis.growth_guidance import comparable_months
+
+            for begin, until, label in comparable_months(report, item):
+                offer(
+                    label,
+                    [_set(item.id, "time", canonical_period(begin, until))],
+                )
+            return
         if field == "time":
             day = end - timedelta(days=1)
             value = _valid_date_choice(item, field, canonical_period(day, end), start, end, today)
@@ -313,6 +348,10 @@ def _build_guidance(resolution, report, today):
             if found:
                 break
         question = f"{resolution.semantic.message} 要为“{_label(item)}”选择哪个日期区间？"
+        if item.domain == "shipping" and item.operation == "growth":
+            from app.analysis.growth_guidance import date_gap_message
+
+            question = date_gap_message(report, item, today)
         dates()
     elif (
         any(i.scope == "all_buyers" for i in context.intents)

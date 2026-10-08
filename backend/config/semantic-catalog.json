@@ -53,6 +53,7 @@
     "shipping": {
       "label": "出库",
       "operations": [
+        "growth",
         "summary",
         "trend",
         "ranking",

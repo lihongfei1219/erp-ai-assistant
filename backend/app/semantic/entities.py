@@ -39,9 +39,24 @@ def bind_entities(compiled, report):
                         "kind": "entity_ambiguous" if candidates else "entity_not_found",
                     }
                 continue
-            bindings.append({**binding_key(intent, condition), "code": code})
+            variant = prior.get("variant") if prior else None
+            if variant and (step.kind != "growth" or condition.operator == "exclude"):
+                return Compilation(
+                    "clarify",
+                    compiled.context,
+                    message="当前保留了品种规格限定，请重新说明新的完整分析问题。",
+                )
+            bindings.append(
+                {
+                    **binding_key(intent, condition),
+                    "code": code,
+                    **({"variant": variant} if variant else {}),
+                }
+            )
             filters.append(
-                ObjectFilter(field=condition.field, operator=condition.operator, code=code)
+                ObjectFilter(
+                    field=condition.field, operator=condition.operator, code=code, variant=variant
+                )
             )
         steps.append(step.model_copy(update={"filters": filters}))
     context = compiled.context.model_copy(

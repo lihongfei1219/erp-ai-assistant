@@ -11,9 +11,14 @@ from app.connectors.qy import SalesExtract
 from app.schemas.sales import AnalysisWindow, DataScope
 
 # Unit tests never inherit the developer's private .env, including during collection.
-if not any(os.environ.get(name) == "1" for name in (
-    "ERP_RUN_INTEGRATION", "ERP_RUN_ASSISTANT_TESTS", "ERP_RUN_MODEL_TESTS",
-)):
+if not any(
+    os.environ.get(name) == "1"
+    for name in (
+        "ERP_RUN_INTEGRATION",
+        "ERP_RUN_ASSISTANT_TESTS",
+        "ERP_RUN_MODEL_TESTS",
+    )
+):
     os.environ["ERP_ENV_FILE"] = str(Path(__file__).with_name(".env.test-not-present"))
     os.environ["ERP_CONTEXT_SIGNING_KEY"] = "ab" * 32
 
@@ -179,3 +184,17 @@ def multi_report(extract, window, scope, source_as_of):
     data = report.model_dump(mode="json")
     data["operations"] = operations_payload(report)
     return SalesReport.model_validate(data)
+
+
+@pytest.fixture
+def growth_report(multi_report):
+    from app.schemas.operations import OperationsSnapshot
+    from tests.growth_fixtures import part
+
+    data = multi_report.operations.model_dump()
+    data["shipping_history"] = [
+        part("2026-08-01", "2026-09-01", [("A", "100"), ("B", "20"), ("C", "40")], 100),
+        part("2026-07-01", "2026-08-01", [("A", "60"), ("B", "40")], 200),
+        part("2025-08-01", "2025-09-01", [("A", "200")], 300),
+    ]
+    return multi_report.model_copy(update={"operations": OperationsSnapshot.model_validate(data)})

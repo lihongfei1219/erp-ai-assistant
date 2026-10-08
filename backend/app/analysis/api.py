@@ -34,6 +34,9 @@ from app.semantic.schemas import SemanticInterpretation
 
 
 def register_analysis_routes(router, get_report, planner=None, *, context_secret=""):
+    from app.analysis.growth_api import manual_context, register_growth_routes
+
+    register_growth_routes(router, get_report)
     Report = Annotated[SalesReport, Depends(get_report)]
 
     def get_planner():
@@ -105,7 +108,12 @@ def register_analysis_routes(router, get_report, planner=None, *, context_secret
     @router.post("/analysis/run", response_model=AnalysisResponse)
     def run(plan: AnalysisPlan, report: Report):
         try:
-            return execute_analysis(report, plan)
+            result = execute_analysis(report, plan)
+            if any(step.kind == "growth" for step in plan.steps):
+                result = result.model_copy(update={
+                    "conversation_token": manual_context(plan, report, context_secret)
+                })
+            return result
         except QueryUnavailable as exc:
             raise HTTPException(422, str(exc)) from None
 

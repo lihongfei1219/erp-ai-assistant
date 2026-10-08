@@ -22,13 +22,18 @@ from app.semantic.schemas import SemanticRequest
 
 
 @pytest.mark.parametrize("cap", list(REGISTRY.values()), ids=lambda c: c.id)
-def test_every_registered_metric_runs_on_existing_executor(multi_report, cap):
+def test_every_registered_metric_runs_on_existing_executor(multi_report, growth_report, cap):
+    if cap.kind == "growth":
+        multi_report = growth_report
     start, _ = date_bounds(multi_report, cap.domain)
     for metric in cap.metrics:
         params = dict(
             domain=cap.domain, kind=cap.kind, metric=metric,
             start_date=start, end_date_exclusive=start + timedelta(days=1),
         )
+        if cap.kind == "growth":
+            params.update(start_date="2026-08-01", end_date_exclusive="2026-09-01",
+                          filters=[dict(field="product", code="P")])
         if cap.operation == "comparison":
             params.update(
                 comparison_start_date=start + timedelta(days=1),

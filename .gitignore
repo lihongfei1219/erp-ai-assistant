@@ -14,3 +14,5 @@ database_backups/
 node_modules/
 .vite/
 dist/
+outputs/
+*.pdf

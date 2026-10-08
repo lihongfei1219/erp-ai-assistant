@@ -29,6 +29,8 @@ class DocumentLine(FactModel):
     unit: Code
     quantity: Nonnegative
     amount: Nonnegative
+    specification: str | None = None
+    manufacturer: str | None = None
 
 
 class BusinessDocument(FactModel):
@@ -66,10 +68,20 @@ class DocumentFacts(FactModel):
     control_line_count: int = Field(ge=0)
     control_amount: Nonnegative
     control_quantities: dict[Code, Nonnegative]
+    comparison_ready: bool = False
 
     @model_validator(mode="after")
     def reconciled(self):
         lines = [line for doc in self.documents for line in doc.lines]
+        if self.comparison_ready and (
+            self.source_tables != ["CKFHQRH", "CKFHQRB"]
+            or self.included_statuses != ["已确认"]
+            or any(
+                not (line.specification or "").strip() or not (line.manufacturer or "").strip()
+                for line in lines
+            )
+        ):
+            raise ValueError("可比出库分区须来自已确认销售出库并保留规格厂家")
         if (
             not 0 < (self.end_exclusive - self.start).days <= 366
             or self.control_document_count != len(self.documents)
@@ -121,6 +133,7 @@ class OperationsSnapshot(FactModel):
     returns: DocumentFacts | None = None
     shipping: DocumentFacts | None = None
     inventory: InventoryFacts | None = None
+    shipping_history: list[DocumentFacts] = Field(default_factory=list, max_length=36)
 
     @model_validator(mode="after")
     def consistent(self):
@@ -128,7 +141,18 @@ class OperationsSnapshot(FactModel):
             raise ValueError("业务事实范围或水位无效")
         if self.inventory and (not self.all_buyers or self.inventory.as_of != self.source_as_of):
             raise ValueError("库存只能用于全平台授权范围且时点必须与备份一致")
-        for facts in (self.returns, self.shipping):
+        shipping_parts = ([self.shipping] if self.shipping else []) + self.shipping_history
+        for left, right in zip(
+            sorted(shipping_parts, key=lambda p: p.start),
+            sorted(shipping_parts, key=lambda p: p.start)[1:],
+            strict=False,
+        ):
+            if left.end_exclusive > right.start:
+                raise ValueError("历史出库分区不能重叠")
+        identifiers = [doc.document_id for part in shipping_parts for doc in part.documents]
+        if len(identifiers) != len(set(identifiers)):
+            raise ValueError("历史出库单据键重复")
+        for facts in (self.returns, *shipping_parts):
             if facts and any(
                 doc.occurred_at > self.source_as_of
                 or (not self.all_buyers and doc.buyer_code not in self.buyer_codes)

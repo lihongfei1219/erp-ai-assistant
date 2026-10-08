@@ -89,6 +89,17 @@ DOMAINS = MappingProxyType(
 
 
 def _capabilities():
+    yield Capability(
+        "shipping",
+        "growth",
+        "growth",
+        ("amount", "quantity"),
+        ("amount", "quantity"),
+        ("product", "buyer"),
+        "品种变化与客户贡献",
+        limited=True,
+        dimensions=("product", "buyer"),
+    )
     sales = (
         ("summary", "summary", ("amount",), ("amount", "orders"), ("product", "buyer"), "销售概览"),
         (
@@ -246,6 +257,12 @@ def validate_step(step):
         raise ValueError("只有排行接受排序方向")
     if not cap.limited and step.top_n != DEFAULT_ITEMS:
         raise ValueError("该分析不接受排行条数")
+    if step.kind == "growth":
+        from app.core.comparison_periods import growth_periods
+
+        growth_periods(step)
+    elif (step.growth_basis, step.growth_direction, step.growth_sort) != ("both", "both", "delta"):
+        raise ValueError("只有品种变化分析接受增长比较参数")
     if cap.operation == "comparison":
         start, end = step.comparison_start_date, step.comparison_end_date_exclusive
         if start is None or end is None or (end - start).days != days:

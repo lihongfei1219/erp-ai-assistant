@@ -17,7 +17,8 @@ def numbered_choices(turn: DialogueTurn):
 def render_guidance(payload):
     turn = (
         DialogueTurn.model_validate(payload["dialogue_turn"])
-        if payload.get("dialogue_turn") else None
+        if payload.get("dialogue_turn")
+        else None
     )
     title = "确认一下你的想法"
     sections, details = [], []
@@ -25,36 +26,46 @@ def render_guidance(payload):
         title = "请用文字说明你的选择"
         sections.append(payload["notice"])
     if turn is not None:
+        if turn.status == "data_gap" and not payload.get("notice"):
+            title = "所选日期暂无完整数据"
         if turn.understood_summary:
             details.append("已理解的需求\n" + turn.understood_summary)
         if turn.applied_defaults:
             details.append("默认条件（可以修改）\n" + "；".join(turn.applied_defaults))
         if turn.clarification is not None:
             question = turn.clarification.question
+            selected = next(
+                (item for item in turn.draft.intents if item.id == turn.clarification.intent_id),
+                None,
+            )
+            growth = bool(
+                selected
+                and selected.fields.get("domain") == "shipping"
+                and selected.fields.get("operation") == "growth"
+            )
             details.append("待确认事项\n" + question)
-            if len(question) > 100 and numbered_choices(turn):
+            if len(question) > 100 and numbered_choices(turn) and not growth:
                 question = {
                     "capability_gap": "当前条件暂不支持，要调整为下面哪一种？",
                     "data_gap": "所需日期没有完整数据，要改查哪个时间？",
                 }.get(turn.status, "下面哪一种更接近你的想法？")
             sections.append(question)
             if turn.clarification.field in {"time", "comparison_time"}:
-                selected = next(
-                    (
-                        item for item in turn.draft.intents
-                        if item.id == turn.clarification.intent_id
-                    ),
-                    None,
-                )
                 start = turn.available_dates.start
                 end = turn.available_dates.end_exclusive - timedelta(days=1)
-                if selected and selected.fields.get("domain") == "inventory":
+                if growth:
+                    if end >= start:
+                        sections.append(
+                            f"最近连续完整出库记录：{start} 至 {end}。"
+                            "同比／环比还需对应比较期完整，不能只看本期是否在此范围内。"
+                        )
+                    else:
+                        sections.append("当前尚无可用于品种比较的完整出库记录。")
+                elif selected and selected.fields.get("domain") == "inventory":
                     sections[-1] = "目前只有备份库存，要查看这份快照吗？"
                     sections.append(f"可用库存快照日期：{start}，不是实时或当日日末库存。")
                 else:
-                    date_hint = (
-                        f"{start} 至 {end}" if end >= start else "暂无完整日期"
-                    )
+                    date_hint = f"{start} 至 {end}" if end >= start else "暂无完整日期"
                     if turn.clarification.kind in {"missing", "data_gap"}:
                         sections[-1] = (
                             "所需日期没有完整数据，要改查哪个时间？"
@@ -78,7 +89,9 @@ def render_guidance(payload):
     if turn and numbered_choices(turn) and payload.get("number_reply_allowed", True):
         reply = "再次 @我 回复编号，以最新一张提问卡片为准；都不是，也可以直接用文字说明。"
     sections.append(reply)
-    details.append("已明确的条件会保留，不用重写整个问题。上下文保留30分钟；发送“重新开始”开启新话题。")
+    details.append(
+        "已明确的条件会保留，不用重写整个问题。上下文保留30分钟；发送“重新开始”开启新话题。"
+    )
     elements = [text(section) for section in sections]
     elements.append(panel("查看已保留的条件与说明", "\n\n".join(details)))
     card = {
@@ -109,16 +122,15 @@ def coverage_text(report):
     if missing:
         lines.append("当前快照或授权范围尚不可查：" + "、".join(missing))
     lines.append("当前为历史备份。未覆盖的日期不会当成零，也不会自动替换你指定的日期。")
-    lines.append("销售按订单创建日期统计有效订单金额，非支付成交额、未扣退款；退货和出库按各自业务日期统计。")
+    lines.append(
+        "销售按订单创建日期统计有效订单金额，非支付成交额、未扣退款；退货和出库按各自业务日期统计。"
+    )
     return "\n".join(lines)
 
 
 def help_text(report):
     start, end = available_dates(report)
-    fallback = (
-        f"\n模型暂不可用时，可使用固定指令：{start}至{start} 销售概览"
-        if end > start else ""
-    )
+    fallback = f"\n模型暂不可用时，可使用固定指令：{start}至{start} 销售概览" if end > start else ""
     return (
         "在本群 @我，直接说你想了解的经营情况，可以先说一个大致目标，不需要按固定格式提问。\n"
         "我会展示已理解的需求，缺信息时每次只问一个关键问题。\n\n"
