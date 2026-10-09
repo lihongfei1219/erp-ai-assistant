@@ -12,6 +12,7 @@ from app.analysis.analytics import execute_analysis
 from app.analysis.planning import describe_interpretation, resolve_question
 from app.analysis.sales_query import QueryUnavailable
 from app.integrations.feishu_analytics_cards import render_analysis
+from app.integrations.feishu_conversation import conversation_closed, next_round, round_notice
 from app.integrations.feishu_guidance import numbered_choices as _numbered_choices
 from app.integrations.feishu_guidance import render_guidance as _render_guidance
 from app.schemas.analytics import AnalysisPlan, AnalysisQuestion
@@ -50,8 +51,8 @@ def _save(store, job, payload):
     job["payload"] = payload
 
 
-def _store_result(result):
-    card, text = render_analysis(result)
+def _store_result(result, payload):
+    card, text = render_analysis(result, conversation_notice=round_notice(payload))
     # Plotly figures are for the web; Feishu gets tabular facts and evidence IDs.
     stored = result.model_dump(mode="json", exclude={"results": {"__all__": {"chart"}}})
     stored["reply_card"] = card
@@ -60,9 +61,16 @@ def _store_result(result):
 
 def _number_needs_words(job, store, previous, key):
     payload = {
+        **(next_round(previous) if not conversation_closed(previous) else {
+            "conversation_round": previous["conversation_round"],
+        }),
         "kind": "semantic_notice", "guided": True, "snapshot_key": key,
         "status": "needs_input", "number_reply_allowed": False,
-        "notice": "无法确定你选的是哪轮建议，请用文字说明。",
+        "notice": (
+            "上一段对话已结束，旧编号不再有效。请重新发送完整问题。"
+            if conversation_closed(previous)
+            else "无法确定你选的是哪轮建议，请用文字说明。"
+        ),
     }
     if previous:
         for field in ("semantic_context", "dialogue_turn", "product_scope_note"):
@@ -80,7 +88,10 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
     answered_round = None
     if len(question) == 1 and question in "123456789":
         candidate = store.latest_numbered_choice_context(job)
-        if not candidate or candidate.get("snapshot_key") != key:
+        if (
+            not candidate or candidate.get("snapshot_key") != key
+            or conversation_closed(candidate)
+        ):
             return _number_needs_words(job, store, previous, key)
         pending = DialogueTurn.model_validate(candidate["dialogue_turn"])
         choices = _numbered_choices(pending)
@@ -88,6 +99,7 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
         if index >= len(choices):
             return _number_needs_words(job, store, previous, key)
         conversation = SemanticContext.model_validate(candidate["semantic_context"])
+        previous = candidate
         answered_round = conversation.dialogue_id
         body = ConversationRequest(choice_id=choices[index].id)
     body = body.model_copy(update={"request_id": "job-" + str(job["job_id"])})
@@ -102,6 +114,7 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
     ))
     turn = outcome.turn
     common = {
+        **next_round(previous),
         "snapshot_key": key,
         "semantic_context": outcome.context.model_dump(mode="json"),
         "product_scope_note": outcome.context.product_scope_note,
@@ -123,7 +136,7 @@ def _answer_guided(job, store, report, planner, original, previous, key, convers
         **common, "kind": "analysis", "plan": result.plan.model_dump(mode="json"),
         "interpretation": result.interpretation,
     })
-    return _store_result(result)
+    return _store_result(result, job["payload"])
 
 
 def answer_analysis(job, store, report_loader, planner):
@@ -132,7 +145,10 @@ def answer_analysis(job, store, report_loader, planner):
         # Safe recovery after persisting the decision but before persisting its reply.
         if payload.get("guided") or payload.get("dialogue_turn"):
             return _render_guidance(payload)
-        return {"unavailable": True, "semantic_status": payload["status"]}, payload["notice"]
+        return {"unavailable": True, "semantic_status": payload["status"]}, (
+            payload["notice"] + ("\n\n" + round_notice(payload)
+                                 if "conversation_round" in payload else "")
+        )
     if payload["kind"] == "analysis_planning":
         raise QueryUnavailable("上次自然语言解析被中断，为避免重复调用，请重新提问。")
     if payload["kind"] == "analysis_question":
@@ -142,6 +158,11 @@ def answer_analysis(job, store, report_loader, planner):
         key = snapshot_key(report)
         previous = store.latest_analysis_context(job)
         if previous and previous.get("snapshot_key") != key:
+            previous = None
+        if conversation_closed(previous):
+            question = payload["question"].strip()
+            if len(question) == 1 and question in "123456789":
+                return _number_needs_words(job, store, previous, key)
             previous = None
         body = AnalysisQuestion(
             question=payload["question"], previous_plan=previous.get("plan") if previous else None
@@ -171,6 +192,7 @@ def answer_analysis(job, store, report_loader, planner):
                 store,
                 job,
                 {
+                    **next_round(previous),
                     "kind": "semantic_notice",
                     "snapshot_key": key,
                     "semantic_context": resolution.semantic.context.model_dump(mode="json"),
@@ -182,7 +204,7 @@ def answer_analysis(job, store, report_loader, planner):
             return {
                 "unavailable": True,
                 "semantic_status": resolution.semantic.status,
-            }, resolution.semantic.message
+            }, resolution.semantic.message + "\n\n" + round_notice(job["payload"])
         plan, interpretation = resolution.plan, resolution.interpretation
         product_scope_note = "药品" in compact_question(body.question) or bool(
             previous and previous.get("product_scope_note")
@@ -194,6 +216,7 @@ def answer_analysis(job, store, report_loader, planner):
                 "沿用当前商品范围，未按药品类别筛选，可能包含器械、保健品等其他商品。"
             )
         payload = {
+            **next_round(previous),
             "kind": "analysis",
             "plan": plan.model_dump(mode="json"),
             "interpretation": interpretation,
@@ -209,7 +232,12 @@ def answer_analysis(job, store, report_loader, planner):
         if payload.get("snapshot_key", key) != key:
             raise QueryUnavailable("数据快照已更新，请重新提问以使用新的数据范围。")
         payload = dict(payload, snapshot_key=key)
+        if "conversation_round" not in payload:
+            previous = store.latest_analysis_context(job)
+            if previous and previous.get("snapshot_key") != key:
+                previous = None
+            payload.update(next_round(previous))
         _save(store, job, payload)
     result = execute_analysis(report, AnalysisPlan.model_validate(payload["plan"]))
     result = result.model_copy(update={"interpretation": payload["interpretation"]})
-    return _store_result(result)
+    return _store_result(result, payload)

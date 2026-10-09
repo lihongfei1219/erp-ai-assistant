@@ -3,6 +3,10 @@ import { test, expect } from "@playwright/test";
 test("品种比较可以追溯客户、切换证据期间并下载完整明细", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "品种增长", exact: true })
+    .click();
   await expect(page.getByLabel("品种比较开始日期")).toHaveValue("2026-08-01");
   await expect(page.getByLabel("品种比较结束日期")).toHaveValue("2026-08-31");
   await page.getByRole("button", { name: "比较品种变化", exact: true }).click();
@@ -41,6 +45,10 @@ test("品种比较可以追溯客户、切换证据期间并下载完整明细",
 test("榜内搜索、键盘选中与精确字段展开不改变汇总", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "品种增长", exact: true })
+    .click();
   await page.getByRole("button", { name: "比较品种变化", exact: true }).click();
   const output = page.getByTestId("analysis-results");
   await expect(output.getByLabel("变化概览")).toContainText("160.00");
@@ -68,6 +76,10 @@ test("手机下结果卡与证据弹窗保持在视口内", async ({ page }) => 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "品种增长", exact: true })
+    .click();
   await page.getByRole("button", { name: "比较品种变化", exact: true }).click();
   const output = page.getByTestId("analysis-results");
   await expect(output.getByLabel("变化概览")).toContainText("160.00");
@@ -123,6 +135,10 @@ test("数量结果按单位切换，汇总和条目同步", async ({ page }) => 
   });
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "品种增长", exact: true })
+    .click();
   await page.getByLabel("品种比较指标").selectOption("quantity");
   await page.getByRole("button", { name: "比较品种变化", exact: true }).click();
   const output = page.getByTestId("analysis-results");
@@ -137,6 +153,10 @@ test("数量结果按单位切换，汇总和条目同步", async ({ page }) => 
 test("缺失去年同期不能变成零出库", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "品种增长", exact: true })
+    .click();
   await page.getByLabel("品种比较开始日期").fill("2026-07-01");
   await page.getByLabel("品种比较结束日期").fill("2026-07-31");
   await page.getByLabel("品种比较基准").selectOption("year_over_year");

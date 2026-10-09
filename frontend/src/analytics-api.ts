@@ -7,19 +7,27 @@ export type AnalysisKind =
   | "anomalies"
   | "list"
   | "existence"
-  | "growth";
+  | "growth"
+  | "price"
+  | "margin"
+  | "inventory_risk"
+  | "stocking";
 export type BusinessDomain = "sales" | "returns" | "shipping" | "inventory";
 export interface AnalysisStep {
   domain?: BusinessDomain;
   kind: AnalysisKind;
   start_date: string;
   end_date_exclusive: string;
-  metric?: "amount" | "orders" | "quantity" | "stock";
+  metric?:
+    "amount" | "orders" | "quantity" | "stock" | "unit_price" | "gross_profit";
   order?: "ascending" | "descending";
   top_n?: number;
   dimension?: "product" | "buyer";
   comparison_start_date?: string;
   comparison_end_date_exclusive?: string;
+  lookback_days?: number;
+  age_threshold_days?: number;
+  expiry_threshold_days?: number;
   growth_basis?: "both" | "previous" | "year_over_year";
   growth_direction?: "both" | "increase" | "decrease";
   growth_sort?: "delta" | "rate";
@@ -43,7 +51,10 @@ export interface AnalysisCatalog {
     {
       label: string;
       executable: boolean;
+      available_start?: string;
+      inventory_risk_ready?: boolean;
       growth_coverage?: { start: string; end_exclusive: string }[];
+      cost_coverage?: { start: string; end_exclusive: string }[];
     }
   >;
   available_start: string;
@@ -61,7 +72,7 @@ export interface AnalysisResult {
   kind: AnalysisKind;
   title: string;
   columns: Record<string, string>;
-  rows: Record<string, string | number | number[] | null>[];
+  rows: Record<string, string | number | number[] | boolean | null>[];
   totals: Record<string, unknown>;
   findings: string[];
   notes: string[];

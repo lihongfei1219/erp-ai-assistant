@@ -18,6 +18,7 @@ from pydantic_ai.usage import UsageLimits
 
 from app.ai.model_client import ModelSettings
 from app.analysis.sales_query import QueryUnavailable
+from app.core.timeouts import MODEL_CONNECT_TIMEOUT, MODEL_READ_TIMEOUT, SEMANTIC_TIMEOUT
 from app.semantic.catalog import load_catalog
 from app.semantic.prompt import PROMPT
 from app.semantic.schemas import SemanticInput, SemanticRequest
@@ -68,9 +69,10 @@ def _unavailable(error: Exception, started: float) -> "SemanticProviderUnavailab
     reason = _failure_reason(error)
     # Never log exception messages, response bodies, prompts, endpoints or credentials.
     logger.warning(
-        "semantic_provider_failed reason=%s elapsed_ms=%d",
+        "semantic_provider_failed reason=%s elapsed_ms=%d timeout_stage=%s",
         reason,
         round((time.monotonic() - started) * 1000),
+        _timeout_stage(error) if reason == "timeout" else "none",
     )
     messages = {
         "timeout": "云端模型响应超时，请稍后重试。",
@@ -82,6 +84,20 @@ def _unavailable(error: Exception, started: float) -> "SemanticProviderUnavailab
         "unavailable": "云端语义服务暂时不可用，请稍后重试。",
     }
     return SemanticProviderUnavailable(messages[reason], reason=reason)
+
+
+def _timeout_stage(error: Exception) -> str:
+    seen = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        for error_type, stage in (
+            (httpx2.ConnectTimeout, "connect"), (httpx2.ReadTimeout, "read"),
+            (httpx2.WriteTimeout, "write"), (httpx2.PoolTimeout, "pool"),
+        ):
+            if isinstance(error, error_type):
+                return stage
+        error = error.__cause__ or error.__context__
+    return "total_or_unspecified"
 
 
 class SemanticProvider(Protocol):
@@ -121,11 +137,12 @@ class CloudSemanticProvider:
             raise SemanticProviderUnavailable("自然语言理解未启用，请配置云端模型或使用手动分析。")
         started = time.monotonic()
         try:
-            async with asyncio.timeout(30):
+            async with asyncio.timeout(SEMANTIC_TIMEOUT):
                 if self.model is not None:
                     return await self._run(self.model, request)
                 async with httpx2.AsyncClient(
-                    timeout=25, follow_redirects=False, trust_env=False
+                    timeout=httpx2.Timeout(MODEL_READ_TIMEOUT, connect=MODEL_CONNECT_TIMEOUT),
+                    follow_redirects=False, trust_env=False,
                 ) as http:
                     async with AsyncOpenAI(
                         base_url=self.settings.base_url,

@@ -11,7 +11,9 @@ from app.connectors.qy import SourceDataError, _query
 from app.schemas.operations import DocumentFacts, InventoryFacts, OperationsSnapshot
 
 
-def _read_documents(connection, report, domain, max_documents, max_lines, *, comparison=False):
+def _read_documents(
+    connection, report, domain, max_documents, max_lines, *, comparison=False, costs=False
+):
     returns = domain == "returns"
     header, detail = ("XSTHDH", "XSTHDB") if returns else ("CKFHQRH", "CKFHQRB")
     date_field = "CJRQ" if returns else "SHRQ"
@@ -88,6 +90,7 @@ def _read_documents(connection, report, domain, max_documents, max_lines, *, com
         RTRIM(b.SPBM) product_code,RTRIM(b.SPMC) product_name,
         RTRIM(b.DW) unit,b.SL quantity,b.JE amount
         {", RTRIM(b.GG) specification, RTRIM(b.SCCS) manufacturer" if comparison else ""}
+        {", b.CGJ purchase_unit_cost" if costs else ""}
         FROM dbo.{detail} b JOIN dbo.{header} h ON h.DjLsh=b.DjLsh
         LEFT JOIN dbo.XSDDH s ON s.BJDH=h.{order_field}
         WHERE {predicate} ORDER BY b.DjLsh,b.DjBth
@@ -101,6 +104,19 @@ def _read_documents(connection, report, domain, max_documents, max_lines, *, com
     )
     if len(headers) > max_documents or len(lines) > max_lines:
         raise SourceDataError("业务单据或明细超过读取上限，请缩小日期或范围")
+    purchase_cost = None
+    if costs:
+        purchase_cost = connection.execute(
+            _query(
+                f"""
+            SELECT COALESCE(SUM(CAST(b.SL AS decimal(18,4))*b.CGJ),0)
+            FROM dbo.CKFHQRB b JOIN dbo.CKFHQRH h ON h.DjLsh=b.DjLsh
+            LEFT JOIN dbo.XSDDH s ON s.BJDH=h.BJDH WHERE {predicate}
+        """,
+                scope,
+            ),
+            params,
+        ).scalar_one()
     control = (
         connection.execute(
             _query(
@@ -157,6 +173,8 @@ def _read_documents(connection, report, domain, max_documents, max_lines, *, com
         value["lines"] = by_id[value["document_id"]]
         documents.append(value)
     return DocumentFacts(
+        cost_ready=costs,
+        control_purchase_cost=purchase_cost,
         comparison_ready=comparison,
         start=window.start,
         end_exclusive=window.end,
@@ -172,13 +190,21 @@ def _read_documents(connection, report, domain, max_documents, max_lines, *, com
     )
 
 
-def _read_inventory(connection, report, max_records):
+def _read_inventory(connection, report, max_records, *, risk=False):
+    extra = (
+        ", RTRIM(p.GG) specification, RTRIM(p.SCCS) manufacturer, "
+        "CAST(s.RKRQ AS date) received_date, CAST(s.YXQZ AS date) expiry_date, "
+        "s.CGJ purchase_unit_cost"
+        if risk
+        else ""
+    )
     rows = (
         connection.execute(
             text(f"""
         SELECT TOP ({max_records + 1}) s.DjLsh record_id,RTRIM(s.SPBM) product_code,
         RTRIM(p.SPMC) product_name,RTRIM(p.DW) unit,
         COALESCE(RTRIM(s.SPPC),'') batch_code,s.KCSL quantity
+        {extra}
         FROM dbo.SPPHGLBH s LEFT JOIN dbo.HGJYSPDAH p ON s.SPBM=p.SPBM ORDER BY s.DjLsh
     """)
         )
@@ -197,12 +223,35 @@ def _read_inventory(connection, report, max_records):
         .mappings()
         .all()
     )
+    known_cost = None
+    if risk:
+        known_cost = connection.execute(
+            text("""
+            SELECT COALESCE(SUM(CAST(KCSL AS decimal(18,4))*CGJ),0) FROM dbo.SPPHGLBH
+        """)
+        ).scalar_one()
     return InventoryFacts(
+        risk_ready=risk,
+        control_known_cost=known_cost,
         as_of=report.metadata.source_as_of,
         records=[dict(r) for r in rows],
         control_record_count=sum(r["n"] for r in controls),
         control_quantities={r["unit"]: r["quantity"] for r in controls},
     )
+
+
+def read_inventory_risk(engine, report, max_records=200_000):
+    if type(max_records) is not int or max_records <= 0:
+        raise ValueError("读取上限必须为正整数")
+    if not report.metadata.scope.all_buyers:
+        raise SourceDataError("库存风险仅对全平台授权开放")
+    with engine.connect() as connection, connection.begin():
+        identity = connection.execute(
+            text("SELECT DB_NAME(),is_read_only FROM sys.databases WHERE database_id=DB_ID()")
+        ).one()
+        if identity[0] != "ERP_Local" or not identity[1]:
+            raise SourceDataError("库存风险仅从只读 ERP_Local 提取")
+        return _read_inventory(connection, report, max_records, risk=True)
 
 
 def read_operations(engine, report, *, max_documents=50_000, max_lines=200_000):
@@ -231,7 +280,9 @@ def read_operations(engine, report, *, max_documents=50_000, max_lines=200_000):
         raise SourceDataError("业务事实校验或主明细／数量对账未通过，未发布新快照") from None
 
 
-def read_shipping_history(engine, report, windows, *, max_documents=50_000, max_lines=200_000):
+def read_shipping_history(
+    engine, report, windows, *, max_documents=50_000, max_lines=200_000, costs=False
+):
     """Read explicit bounded partitions; the caller publishes a new snapshot only after all pass."""
     if any(type(n) is not int or n <= 0 for n in (max_documents, max_lines)):
         raise ValueError("读取上限必须为正整数")
@@ -259,7 +310,13 @@ def read_shipping_history(engine, report, windows, *, max_documents=50_000, max_
                 update={"metadata": report.metadata.model_copy(update={"window": window})}
             )
             part = _read_documents(
-                connection, selected, "shipping", max_documents, max_lines, comparison=True
+                connection,
+                selected,
+                "shipping",
+                max_documents,
+                max_lines,
+                comparison=True,
+                costs=costs,
             )
             facts.append(part)
             if (

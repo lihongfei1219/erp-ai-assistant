@@ -9,7 +9,7 @@ RANKINGS = {"product_ranking", "buyer_ranking"}
 
 def metrics(result, currency: str) -> list[dict]:
     totals = result.totals
-    if result.kind == "growth":
+    if result.kind in {"growth", "price", "margin", "inventory_risk", "stocking"}:
         return []
     elif result.domain != "sales":
         if result.domain == "inventory":
@@ -96,7 +96,31 @@ def result_chart(step, result, row_limit: int) -> dict | None:
 def details(
     step, result, currency: str, row_limit: int
 ) -> tuple[list[tuple[str, str]], list[dict]]:
-    if result.kind == "growth":
+    if result.kind == "margin":
+        columns = [
+            (key, result.columns[key])
+            for key in (
+                "name",
+                "comparison",
+                "current_profit",
+                "previous_profit",
+                "delta",
+                "unit",
+            )
+        ]
+    elif result.kind == "price":
+        columns = [
+            (key, result.columns[key])
+            for key in (
+                "name",
+                "comparison",
+                "previous_price",
+                "current_price",
+                "delta",
+                "unit",
+            )
+        ]
+    elif result.kind == "growth":
         columns = [
             (key, result.columns[key])
             for key in ("name", "comparison", "delta", "change_percent", "unit", "record_state")
@@ -150,7 +174,7 @@ def details(
                 code = _label(str(row.get("code", "")), 64)
                 value = f"{row.get('rank', index)}. {name}\n{code}"
             elif key in {"amount", "previous_amount", "delta", "average_order_amount"} and not (
-                result.kind == "growth" and step.metric == "quantity"
+                result.kind == "price" or result.kind == "growth" and step.metric == "quantity"
             ):
                 value = amount(value, currency)
             elif key == "change_rate":

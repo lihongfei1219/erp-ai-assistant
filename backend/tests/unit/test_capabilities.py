@@ -22,18 +22,32 @@ from app.semantic.schemas import SemanticRequest
 
 
 @pytest.mark.parametrize("cap", list(REGISTRY.values()), ids=lambda c: c.id)
-def test_every_registered_metric_runs_on_existing_executor(multi_report, growth_report, cap):
-    if cap.kind == "growth":
+def test_every_registered_metric_runs_on_existing_executor(
+    multi_report, growth_report, margin_report, risk_report, cap
+):
+    if cap.kind in {"inventory_risk", "stocking"}:
+        multi_report = risk_report
+    if cap.kind == "margin":
+        growth_report = margin_report
+    if cap.kind in {"growth", "price", "margin"}:
         multi_report = growth_report
     start, _ = date_bounds(multi_report, cap.domain)
     for metric in cap.metrics:
         params = dict(
-            domain=cap.domain, kind=cap.kind, metric=metric,
-            start_date=start, end_date_exclusive=start + timedelta(days=1),
+            domain=cap.domain,
+            kind=cap.kind,
+            metric=metric,
+            start_date=start,
+            end_date_exclusive=start + timedelta(days=1),
         )
-        if cap.kind == "growth":
-            params.update(start_date="2026-08-01", end_date_exclusive="2026-09-01",
-                          filters=[dict(field="product", code="P")])
+        if cap.kind in {"growth", "price", "margin"}:
+            params.update(
+                start_date="2026-08-01",
+                end_date_exclusive="2026-09-01",
+                filters=[dict(field="product", code="P")],
+            )
+        if cap.kind == "stocking":
+            params.update(start_date="2026-09-17", end_date_exclusive="2026-09-24")
         if cap.operation == "comparison":
             params.update(
                 comparison_start_date=start + timedelta(days=1),
@@ -54,16 +68,18 @@ def test_api_model_and_feishu_share_actual_coverage(multi_report, variant):
     if variant == "sales_only":
         report = report.model_copy(update={"operations": None})
     elif variant == "missing_returns":
-        report = report.model_copy(update={
-            "operations": report.operations.model_copy(update={"returns": None})
-        })
+        report = report.model_copy(
+            update={"operations": report.operations.model_copy(update={"returns": None})}
+        )
     elif variant == "restricted":
-        report = report.model_copy(update={
-            "metadata": report.metadata.model_copy(update={
-                "scope": report.metadata.scope.model_copy(update={"all_buyers": False})
-            }),
-            "operations": report.operations.model_copy(update={"all_buyers": False}),
-        })
+        report = report.model_copy(
+            update={
+                "metadata": report.metadata.model_copy(
+                    update={"scope": report.metadata.scope.model_copy(update={"all_buyers": False})}
+                ),
+                "operations": report.operations.model_copy(update={"all_buyers": False}),
+            }
+        )
     view = capability_view(report)
     request = prepare_semantic_input(
         AnalysisQuestion(question="了解一下经营情况"), report, date(2026, 9, 23)
@@ -101,20 +117,27 @@ def test_vocabulary_keeps_unknown_requests_without_advertising_execution():
     assert "trend" not in catalog["domains"]["inventory"]["executable_operations"]
 
 
-@pytest.mark.parametrize("patch", [
-    {"domain": "inventory", "kind": "trend", "metric": "stock"},
-    {"domain": "inventory", "kind": "buyer_ranking", "metric": "stock"},
-    {"domain": "sales", "kind": "product_ranking", "metric": "quantity"},
-    {"domain": "returns", "kind": "comparison"},
-    {"kind": "summary", "order": "ascending"},
-    {"domain": "inventory", "kind": "list", "metric": "stock", "dimension": "buyer"},
-])
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"domain": "inventory", "kind": "trend", "metric": "stock"},
+        {"domain": "inventory", "kind": "buyer_ranking", "metric": "stock"},
+        {"domain": "sales", "kind": "product_ranking", "metric": "quantity"},
+        {"domain": "returns", "kind": "comparison"},
+        {"kind": "summary", "order": "ascending"},
+        {"domain": "inventory", "kind": "list", "metric": "stock", "dimension": "buyer"},
+    ],
+)
 def test_unregistered_combinations_cannot_bypass_public_plan(patch):
     with pytest.raises(ValidationError):
-        AnalysisStep.model_validate({
-            "kind": "summary", "start_date": "2026-09-01",
-            "end_date_exclusive": "2026-09-02", **patch,
-        })
+        AnalysisStep.model_validate(
+            {
+                "kind": "summary",
+                "start_date": "2026-09-01",
+                "end_date_exclusive": "2026-09-02",
+                **patch,
+            }
+        )
 
 
 def test_capability_changes_invalidate_snapshot_binding_without_leaking_rows(multi_report):
@@ -128,28 +151,47 @@ def test_capability_changes_invalidate_snapshot_binding_without_leaking_rows(mul
 
 
 def test_bad_reconciliation_and_empty_date_coverage_are_not_advertised(multi_report):
-    broken = multi_report.model_copy(update={
-        "quality": multi_report.quality.model_copy(update={"sql_control_totals_match": False})
-    })
+    broken = multi_report.model_copy(
+        update={
+            "quality": multi_report.quality.model_copy(update={"sql_control_totals_match": False})
+        }
+    )
     assert capability_view(broken)["domains"]["sales"]["reason_code"] == "reconciliation_failed"
-    recent = multi_report.model_copy(update={
-        "metadata": multi_report.metadata.model_copy(update={
-            "window": multi_report.metadata.window.model_copy(update={"start": date(2026, 9, 16)})
-        })
-    })
+    recent = multi_report.model_copy(
+        update={
+            "metadata": multi_report.metadata.model_copy(
+                update={
+                    "window": multi_report.metadata.window.model_copy(
+                        update={"start": date(2026, 9, 16)}
+                    )
+                }
+            )
+        }
+    )
     assert capability_view(recent)["domains"]["sales"]["reason_code"] == "no_complete_dates"
 
 
 def test_unavailable_sales_is_explained_without_losing_customer_request(multi_report):
-    broken = multi_report.model_copy(update={
-        "quality": multi_report.quality.model_copy(update={"sql_control_totals_match": False})
-    })
-    request = SemanticRequest(intents=[{
-        "domain": "sales", "operation": "summary", "time": "2026-09-01",
-    }])
+    broken = multi_report.model_copy(
+        update={
+            "quality": multi_report.quality.model_copy(update={"sql_control_totals_match": False})
+        }
+    )
+    request = SemanticRequest(
+        intents=[
+            {
+                "domain": "sales",
+                "operation": "summary",
+                "time": "2026-09-01",
+            }
+        ]
+    )
     body = AnalysisQuestion(question="查看九月一号销售情况")
     compiled = compile_request(
-        request, question=body.question, today=date(2026, 9, 23), domains=[],
+        request,
+        question=body.question,
+        today=date(2026, 9, 23),
+        domains=[],
     )
     outcome = finish_compilation(compiled, body, broken)
     assert outcome.plan is None

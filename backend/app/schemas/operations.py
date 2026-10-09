@@ -31,6 +31,7 @@ class DocumentLine(FactModel):
     amount: Nonnegative
     specification: str | None = None
     manufacturer: str | None = None
+    purchase_unit_cost: Nonnegative | None = None
 
 
 class BusinessDocument(FactModel):
@@ -69,10 +70,23 @@ class DocumentFacts(FactModel):
     control_amount: Nonnegative
     control_quantities: dict[Code, Nonnegative]
     comparison_ready: bool = False
+    cost_ready: bool = False
+    control_purchase_cost: Nonnegative | None = None
 
     @model_validator(mode="after")
     def reconciled(self):
         lines = [line for doc in self.documents for line in doc.lines]
+        if self.cost_ready:
+            if (
+                not self.comparison_ready
+                or any(line.purchase_unit_cost is None for line in lines)
+                or self.control_purchase_cost is None
+                or self.control_purchase_cost
+                != sum((line.quantity * line.purchase_unit_cost for line in lines), Decimal(0))
+            ):
+                raise ValueError("出库采购成本字段或控制总额对账未通过")
+        elif self.control_purchase_cost is not None:
+            raise ValueError("成本控制总额必须对应已验证的成本分区")
         if self.comparison_ready and (
             self.source_tables != ["CKFHQRH", "CKFHQRB"]
             or self.included_statuses != ["已确认"]
@@ -103,6 +117,11 @@ class StockRecord(FactModel):
     unit: Code
     batch_code: str
     quantity: Nonnegative
+    specification: str | None = None
+    manufacturer: str | None = None
+    received_date: date | None = None
+    expiry_date: date | None = None
+    purchase_unit_cost: Nonnegative | None = None
 
 
 class InventoryFacts(FactModel):
@@ -112,9 +131,25 @@ class InventoryFacts(FactModel):
     records: list[StockRecord]
     control_record_count: int = Field(ge=0)
     control_quantities: dict[Code, Nonnegative]
+    risk_ready: bool = False
+    control_known_cost: Nonnegative | None = None
 
     @model_validator(mode="after")
     def reconciled(self):
+        if self.risk_ready and (
+            self.source_tables != ["SPPHGLBH", "HGJYSPDAH"]
+            or self.control_known_cost is None
+            or self.control_known_cost
+            != sum(
+                (
+                    r.quantity * r.purchase_unit_cost
+                    for r in self.records
+                    if r.purchase_unit_cost is not None
+                ),
+                Decimal(0),
+            )
+        ):
+            raise ValueError("库存风险事实的已知采购成本未对账")
         if (
             self.as_of.tzinfo is None
             or self.control_record_count != len(self.records)

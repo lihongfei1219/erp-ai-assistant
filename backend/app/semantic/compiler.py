@@ -52,7 +52,18 @@ def context_from_plan(plan: AnalysisPlan) -> SemanticContext:
                 operation=operation,
                 target=("buyer" if step.kind == "buyer_ranking" else step.dimension)
                 if step.domain == "sales"
-                or step.kind in {"product_ranking", "buyer_ranking", "comparison", "list", "growth"}
+                or step.kind
+                in {
+                    "product_ranking",
+                    "buyer_ranking",
+                    "comparison",
+                    "list",
+                    "growth",
+                    "price",
+                    "margin",
+                    "inventory_risk",
+                    "stocking",
+                }
                 else None,
                 metric=step.metric,
                 time=canonical_period(step.start_date, step.end_date_exclusive),
@@ -62,10 +73,25 @@ def context_from_plan(plan: AnalysisPlan) -> SemanticContext:
                 if step.kind == "comparison"
                 else None,
                 limit=step.top_n,
-                growth_basis=step.growth_basis if step.kind == "growth" else None,
-                growth_direction=step.growth_direction if step.kind == "growth" else None,
-                growth_sort=step.growth_sort if step.kind == "growth" else None,
+                growth_basis=step.growth_basis
+                if step.kind in {"growth", "price", "margin"}
+                else None,
+                growth_direction=step.growth_direction
+                if step.kind in {"growth", "price", "margin"}
+                else None,
+                growth_sort=step.growth_sort
+                if step.kind in {"growth", "price", "margin"}
+                else None,
                 order=step.order,
+                lookback_days=step.lookback_days
+                if step.kind in {"inventory_risk", "stocking"}
+                else None,
+                age_threshold_days=step.age_threshold_days
+                if step.kind == "inventory_risk"
+                else None,
+                expiry_threshold_days=step.expiry_threshold_days
+                if step.kind == "inventory_risk"
+                else None,
                 id=_new_id("goal"),
                 filters=[
                     SemanticFilter(field=f.field, operator=f.operator, value=f.code)
@@ -831,7 +857,7 @@ def compile_request(
         item = next(i for i in intents if i.order == "ascending" and i.operation != "ranking")
         return stop("unsupported", "当前只有排行接受排序方向。", ["order"], intent_id=item.id)
     if any(
-        i.operation != "growth"
+        i.operation not in {"growth", "price", "margin"}
         and any(
             getattr(i, field) is not None
             for field in ("growth_basis", "growth_direction", "growth_sort")
@@ -880,7 +906,11 @@ def compile_request(
                 intent_id=item.id,
             )
         metric = item.metric or (
-            "amount"
+            "gross_profit"
+            if item.operation == "margin"
+            else "unit_price"
+            if item.operation == "price"
+            else "amount"
             if item.operation == "growth"
             else catalog["domains"][item.domain]["default_metric"]
         )
@@ -902,7 +932,22 @@ def compile_request(
         )
         if kind == "list" and item.domain != "sales":
             values["dimension"] = item.target or "product"
-        if kind == "growth":
+        if kind == "stocking":
+            if item.age_threshold_days is not None or item.expiry_threshold_days is not None:
+                return stop("clarify", "备货不接受库龄和临期阈值，请明确分析目标。", ["operation"])
+            values["lookback_days"] = item.lookback_days or 30
+        elif kind == "inventory_risk":
+            values.update(
+                lookback_days=item.lookback_days or 30,
+                age_threshold_days=item.age_threshold_days or 90,
+                expiry_threshold_days=item.expiry_threshold_days or 180,
+            )
+        elif any(
+            getattr(item, key) is not None
+            for key in ("lookback_days", "age_threshold_days", "expiry_threshold_days")
+        ):
+            return stop("clarify", "库龄、效期及销售观察期需要对应库存积压分析。", ["operation"])
+        if kind in {"growth", "price", "margin"}:
             values.update(
                 dimension=item.target or "product",
                 growth_basis=item.growth_basis or "both",
@@ -918,7 +963,17 @@ def compile_request(
                     ["product"],
                     intent_id=item.id,
                 )
-        if kind in {"product_ranking", "buyer_ranking", "comparison", "list", "growth"}:
+        if kind in {
+            "product_ranking",
+            "buyer_ranking",
+            "comparison",
+            "list",
+            "growth",
+            "price",
+            "margin",
+            "inventory_risk",
+            "stocking",
+        }:
             values["top_n"] = limit
         elif item.limit is not None and (
             request.mode == "new"
@@ -984,7 +1039,17 @@ def compile_request(
                     "comparison_time": comparison_time,
                     "metric": metric,
                     "limit": limit
-                    if kind.endswith("ranking") or kind in {"comparison", "list", "growth"}
+                    if kind.endswith("ranking")
+                    or kind
+                    in {
+                        "comparison",
+                        "list",
+                        "growth",
+                        "price",
+                        "margin",
+                        "inventory_risk",
+                        "stocking",
+                    }
                     else None,
                     "target": item.target or "product" if kind.endswith("ranking") else item.target,
                 }

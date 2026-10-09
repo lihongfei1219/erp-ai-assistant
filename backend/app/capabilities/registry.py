@@ -90,6 +90,48 @@ DOMAINS = MappingProxyType(
 
 def _capabilities():
     yield Capability(
+        "inventory",
+        "stocking",
+        "stocking",
+        ("stock",),
+        ("stock",),
+        ("product",),
+        "旺季备货情景测算",
+        limited=True,
+    )
+    yield Capability(
+        "inventory",
+        "inventory_risk",
+        "inventory_risk",
+        ("stock",),
+        ("stock",),
+        ("product",),
+        "库存积压与效期风险",
+        limited=True,
+    )
+    yield Capability(
+        "shipping",
+        "margin",
+        "margin",
+        ("gross_profit",),
+        ("gross_profit",),
+        ("product", "buyer"),
+        "销量与采购成本口径毛利",
+        limited=True,
+        dimensions=("product", "buyer"),
+    )
+    yield Capability(
+        "shipping",
+        "price",
+        "price",
+        ("unit_price",),
+        ("unit_price",),
+        ("product", "buyer"),
+        "售价变化与客户明细",
+        limited=True,
+        dimensions=("product", "buyer"),
+    )
+    yield Capability(
         "shipping",
         "growth",
         "growth",
@@ -249,7 +291,7 @@ def validate_step(step):
         raise ValueError("该业务不支持此对象筛选，库存不支持客户筛选")
     if step.metric not in cap.metrics:
         raise ValueError("该分析不支持此指标")
-    if step.domain == "inventory" and days != 1:
+    if step.domain == "inventory" and step.kind != "stocking" and days != 1:
         raise ValueError("库存必须指定单一时点日期")
     if step.dimension not in cap.dimensions:
         raise ValueError("该分析不支持此拆解维度")
@@ -257,12 +299,23 @@ def validate_step(step):
         raise ValueError("只有排行接受排序方向")
     if not cap.limited and step.top_n != DEFAULT_ITEMS:
         raise ValueError("该分析不接受排行条数")
-    if step.kind == "growth":
+    if step.kind in {"growth", "price", "margin"}:
         from app.core.comparison_periods import growth_periods
 
         growth_periods(step)
     elif (step.growth_basis, step.growth_direction, step.growth_sort) != ("both", "both", "delta"):
         raise ValueError("只有品种变化分析接受增长比较参数")
+    if step.kind not in {"inventory_risk", "stocking"} and (
+        step.lookback_days,
+        step.age_threshold_days,
+        step.expiry_threshold_days,
+    ) != (30, 90, 180):
+        raise ValueError("仅库存风险分析接受库龄、效期和销售观察期参数")
+    if step.kind == "stocking" and (step.age_threshold_days, step.expiry_threshold_days) != (
+        90,
+        180,
+    ):
+        raise ValueError("备货不接受库龄和临期阈值")
     if cap.operation == "comparison":
         start, end = step.comparison_start_date, step.comparison_end_date_exclusive
         if start is None or end is None or (end - start).days != days:

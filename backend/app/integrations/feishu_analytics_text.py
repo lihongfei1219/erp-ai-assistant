@@ -6,7 +6,9 @@ from app.analysis.sales_query import _label
 from app.schemas.analytics import AnalysisResponse
 
 
-def _blocks(response: AnalysisResponse, row_limit: int) -> list[str]:
+def _blocks(
+    response: AnalysisResponse, row_limit: int, conversation_notice: str | None = None
+) -> list[str]:
     blocks = ["本次问题理解\n" + "\n".join(response.interpretation)]
     for step, result in zip(response.plan.steps, response.results, strict=True):
         text = [
@@ -53,7 +55,7 @@ def _blocks(response: AnalysisResponse, row_limit: int) -> list[str]:
         f"（{p.business_timezone}）\n"
         f"销售纳入状态：{'、'.join(p.included_statuses)}；其他业务口径见各项说明；非资金收付，销售未扣退款。\n"
         f"规则版本：{p.policy_id}；查询编号：{response.run_id}\n"
-        "30分钟内可继续 @我 追问；发送“清除追问上下文”重新开始。"
+        + (conversation_notice or "30分钟内可继续 @我 追问；发送“清除追问上下文”重新开始。")
     )
     if response.warnings:
         blocks.append(

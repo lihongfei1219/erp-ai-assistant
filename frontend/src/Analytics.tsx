@@ -17,8 +17,16 @@ import {
 import "./analytics.css";
 import { GrowthPanel } from "./GrowthAnalysis";
 import { GrowthResult } from "./GrowthResult";
+import { PricePanel, PriceResult } from "./PriceAnalysis";
+import { MarginResult } from "./MarginAnalysis";
+import { InventoryRiskPanel, InventoryRiskResult } from "./InventoryRisk";
+import { StockingPanel, StockingResult } from "./Stocking";
 
-export function Analytics() {
+export function Analytics({
+  mode = "general",
+}: {
+  mode?: "general" | "growth" | "price" | "margin" | "inventory" | "stocking";
+}) {
   const [catalog, setCatalog] = useState<AnalysisCatalog | null>(null);
   const [question, setQuestion] = useState("");
   const [kind, setKind] = useState<AnalysisKind>("summary");
@@ -280,7 +288,44 @@ export function Analytics() {
 
   return (
     <div className="analytics-workspace">
-      {catalog && (
+      {(mode === "price" || mode === "margin") && catalog && (
+        <PricePanel
+          mode={mode}
+          costAvailable={
+            !!catalog.semantic_domains?.shipping?.cost_coverage?.length
+          }
+          coverage={
+            (mode === "margin"
+              ? catalog.semantic_domains?.shipping?.cost_coverage
+              : catalog.semantic_domains?.shipping?.growth_coverage) ?? []
+          }
+          busy={busy}
+          onRun={(step) => {
+            void submit("run", { steps: [step] });
+          }}
+        />
+      )}
+      {mode === "stocking" && catalog && (
+        <StockingPanel
+          day={catalog.semantic_domains?.inventory?.available_start ?? ""}
+          ready={!!catalog.semantic_domains?.inventory?.inventory_risk_ready}
+          busy={busy}
+          onRun={(step) => {
+            void submit("run", { steps: [step] });
+          }}
+        />
+      )}
+      {mode === "inventory" && catalog && (
+        <InventoryRiskPanel
+          day={catalog.semantic_domains?.inventory?.available_start ?? ""}
+          ready={!!catalog.semantic_domains?.inventory?.inventory_risk_ready}
+          busy={busy}
+          onRun={(step) => {
+            void submit("run", { steps: [step] });
+          }}
+        />
+      )}
+      {mode === "growth" && catalog && (
         <GrowthPanel
           coverage={catalog.semantic_domains?.shipping?.growth_coverage ?? []}
           busy={busy}
@@ -289,235 +334,243 @@ export function Analytics() {
           }}
         />
       )}
-      <section className="panel analytics-input">
-        <div className="analytics-title">
-          <Sparkles size={22} />
-          <div>
-            <h2>用问题开始分析</h2>
-            <p>
-              直接说你想了解的业务，助手会记住已明确的条件，逐步帮你补齐问题。
-            </p>
-          </div>
-        </div>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (question.trim() && question.length <= 1000)
-              converse({ question: question.trim() });
-          }}
-        >
-          <label htmlFor="analysis-question">分析问题</label>
-          <textarea
-            id="analysis-question"
-            ref={questionInput}
-            value={question}
-            onChange={(event) => {
-              setQuestion(event.target.value);
-              setRetry(null);
-            }}
-            placeholder={
-              dialogue
-                ? "继续补充、修改条件，或提出新的问题……"
-                : "用自己的话说说想了解什么，不需要固定问法……"
-            }
-            required
-            maxLength={1000}
-            rows={3}
-            disabled={busy}
-          />
-          <div className="analytics-actions">
-            <button
-              className="button"
-              disabled={
-                busy ||
-                !catalog?.model_enabled ||
-                !question.trim() ||
-                question.length > 1000
-              }
+      {mode === "general" && (
+        <>
+          <section className="panel analytics-input">
+            <div className="analytics-title">
+              <Sparkles size={22} />
+              <div>
+                <h2>用问题开始分析</h2>
+                <p>
+                  直接说你想了解的业务，助手会记住已明确的条件，逐步帮你补齐问题。
+                </p>
+              </div>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (question.trim() && question.length <= 1000)
+                  converse({ question: question.trim() });
+              }}
             >
-              <Sparkles size={16} />
-              {busy ? "正在分析…" : "开始智能分析"}
-            </button>
-            {(dialogue || conversationToken) && (
-              <button
-                type="button"
-                className="button secondary"
-                onClick={clearConversation}
-              >
-                清除追问上下文
-              </button>
-            )}
-            <small>
-              {catalog?.model_enabled
-                ? dialogue || conversationToken
-                  ? "可直接补充日期或指标，也可继续追问；上下文保留30分钟。"
-                  : `支持自由提问；当前快照可分析：${Object.values(
-                      catalog.semantic_domains || {
-                        sales: { label: "销售", executable: true },
-                      },
-                    )
-                      .filter((d) => d.executable)
-                      .map((d) => d.label)
-                      .join("、")}。`
-                : "自然语言暂不可用，仍可使用下方手动分析。"}
-            </small>
-          </div>
-        </form>
-        {dialogue && (
-          <DialogueGuide
-            turn={dialogue}
-            busy={busy}
-            expired={expired}
-            pendingReply={expiredReply.current}
-            onChoice={converse}
-            onEdit={editCondition}
-            onRestore={restoreDraft}
-          />
-        )}
-        {expired && !dialogue && (
-          <p className="analytics-hint">{expired}请重新说明想了解的内容。</p>
-        )}
-      </section>
-      <section className="panel analytics-input">
-        <div className="analytics-title">
-          <BarChart3 size={21} />
-          <div>
-            <h2>手动分析</h2>
-            <p>
-              {catalog &&
-              catalog.available_end_exclusive > catalog.available_start
-                ? `销售完整数据：${catalog.available_start} 至 ${shiftDay(catalog.available_end_exclusive, -1)}；单次最多 90 天。`
-                : "暂无完整日期可供分析。"}
-            </p>
-          </div>
-        </div>
-        <form onSubmit={manual}>
-          <fieldset
-            disabled={busy || !catalog || !end}
-            className="analytics-fields"
-          >
-            <label>
-              分析类型
-              <select
-                value={kind}
-                onChange={(event) =>
-                  setKind(event.target.value as AnalysisKind)
+              <label htmlFor="analysis-question">分析问题</label>
+              <textarea
+                id="analysis-question"
+                ref={questionInput}
+                value={question}
+                onChange={(event) => {
+                  setQuestion(event.target.value);
+                  setRetry(null);
+                }}
+                placeholder={
+                  dialogue
+                    ? "继续补充、修改条件，或提出新的问题……"
+                    : "用自己的话说说想了解什么，不需要固定问法……"
                 }
-              >
-                {catalog &&
-                  Object.entries(catalog.analyses).map(([id, label]) => (
-                    <option key={id} value={id}>
-                      {label}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label>
-              开始日期
-              <input
-                type="date"
                 required
-                value={start}
-                min={catalog?.available_start}
-                max={end}
-                onChange={(event) => setStart(event.target.value)}
+                maxLength={1000}
+                rows={3}
+                disabled={busy}
               />
-            </label>
-            <label>
-              结束日期
-              <input
-                type="date"
-                required
-                value={end}
-                min={start}
-                max={
-                  catalog
-                    ? shiftDay(catalog.available_end_exclusive, -1)
-                    : undefined
-                }
-                onChange={(event) => setEnd(event.target.value)}
-              />
-            </label>
-            {(isRanking || kind === "trend") && (
-              <label>
-                统计指标
-                <select
-                  value={metric}
-                  onChange={(event) =>
-                    setMetric(event.target.value as "amount" | "orders")
+              <div className="analytics-actions">
+                <button
+                  className="button"
+                  disabled={
+                    busy ||
+                    !catalog?.model_enabled ||
+                    !question.trim() ||
+                    question.length > 1000
                   }
                 >
-                  <option value="amount">订单金额</option>
-                  <option value="orders">订单数</option>
-                </select>
-              </label>
+                  <Sparkles size={16} />
+                  {busy ? "正在分析…" : "开始智能分析"}
+                </button>
+                {(dialogue || conversationToken) && (
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={clearConversation}
+                  >
+                    清除追问上下文
+                  </button>
+                )}
+                <small>
+                  {catalog?.model_enabled
+                    ? dialogue || conversationToken
+                      ? "可直接补充日期或指标，也可继续追问；上下文保留30分钟。"
+                      : `支持自由提问；当前快照可分析：${Object.values(
+                          catalog.semantic_domains || {
+                            sales: { label: "销售", executable: true },
+                          },
+                        )
+                          .filter((d) => d.executable)
+                          .map((d) => d.label)
+                          .join("、")}。`
+                    : "自然语言暂不可用，仍可使用下方手动分析。"}
+                </small>
+              </div>
+            </form>
+            {dialogue && (
+              <DialogueGuide
+                turn={dialogue}
+                busy={busy}
+                expired={expired}
+                pendingReply={expiredReply.current}
+                onChoice={converse}
+                onEdit={editCondition}
+                onRestore={restoreDraft}
+              />
             )}
-            {(isRanking || kind === "comparison") && (
-              <label>
-                展示条数
-                <input
-                  type="number"
-                  required
-                  min={1}
-                  max={50}
-                  value={top}
-                  onChange={(event) => setTop(Number(event.target.value))}
-                />
-              </label>
+            {expired && !dialogue && (
+              <p className="analytics-hint">
+                {expired}请重新说明想了解的内容。
+              </p>
             )}
-            {kind === "comparison" && (
-              <>
+          </section>
+          <section className="panel analytics-input">
+            <div className="analytics-title">
+              <BarChart3 size={21} />
+              <div>
+                <h2>手动分析</h2>
+                <p>
+                  {catalog &&
+                  catalog.available_end_exclusive > catalog.available_start
+                    ? `销售完整数据：${catalog.available_start} 至 ${shiftDay(catalog.available_end_exclusive, -1)}；单次最多 90 天。`
+                    : "暂无完整日期可供分析。"}
+                </p>
+              </div>
+            </div>
+            <form onSubmit={manual}>
+              <fieldset
+                disabled={busy || !catalog || !end}
+                className="analytics-fields"
+              >
                 <label>
-                  比较开始日期
+                  分析类型
+                  <select
+                    value={kind}
+                    onChange={(event) =>
+                      setKind(event.target.value as AnalysisKind)
+                    }
+                  >
+                    {catalog &&
+                      Object.entries(catalog.analyses).map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label>
+                  开始日期
                   <input
                     type="date"
                     required
-                    value={beforeStart}
+                    value={start}
                     min={catalog?.available_start}
-                    onChange={(event) => setBeforeStart(event.target.value)}
+                    max={end}
+                    onChange={(event) => setStart(event.target.value)}
                   />
                 </label>
                 <label>
-                  比较结束日期
+                  结束日期
                   <input
                     type="date"
                     required
-                    value={beforeEnd}
-                    min={beforeStart || catalog?.available_start}
+                    value={end}
+                    min={start}
                     max={
                       catalog
                         ? shiftDay(catalog.available_end_exclusive, -1)
                         : undefined
                     }
-                    onChange={(event) => setBeforeEnd(event.target.value)}
+                    onChange={(event) => setEnd(event.target.value)}
                   />
                 </label>
-                <label>
-                  贡献维度
-                  <select
-                    value={dimension}
-                    onChange={(event) =>
-                      setDimension(event.target.value as "product" | "buyer")
-                    }
-                  >
-                    <option value="product">商品</option>
-                    <option value="buyer">客户</option>
-                  </select>
-                </label>
-              </>
+                {(isRanking || kind === "trend") && (
+                  <label>
+                    统计指标
+                    <select
+                      value={metric}
+                      onChange={(event) =>
+                        setMetric(event.target.value as "amount" | "orders")
+                      }
+                    >
+                      <option value="amount">订单金额</option>
+                      <option value="orders">订单数</option>
+                    </select>
+                  </label>
+                )}
+                {(isRanking || kind === "comparison") && (
+                  <label>
+                    展示条数
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={50}
+                      value={top}
+                      onChange={(event) => setTop(Number(event.target.value))}
+                    />
+                  </label>
+                )}
+                {kind === "comparison" && (
+                  <>
+                    <label>
+                      比较开始日期
+                      <input
+                        type="date"
+                        required
+                        value={beforeStart}
+                        min={catalog?.available_start}
+                        onChange={(event) => setBeforeStart(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      比较结束日期
+                      <input
+                        type="date"
+                        required
+                        value={beforeEnd}
+                        min={beforeStart || catalog?.available_start}
+                        max={
+                          catalog
+                            ? shiftDay(catalog.available_end_exclusive, -1)
+                            : undefined
+                        }
+                        onChange={(event) => setBeforeEnd(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      贡献维度
+                      <select
+                        value={dimension}
+                        onChange={(event) =>
+                          setDimension(
+                            event.target.value as "product" | "buyer",
+                          )
+                        }
+                      >
+                        <option value="product">商品</option>
+                        <option value="buyer">客户</option>
+                      </select>
+                    </label>
+                  </>
+                )}
+                <button className="button" type="submit">
+                  <Search size={16} />
+                  {busy ? "正在计算…" : "运行分析"}
+                </button>
+              </fieldset>
+            </form>
+            {kind === "comparison" && (
+              <p className="analytics-hint">
+                两个期间必须天数相同且不重叠。变化贡献用于定位线索，不代表因果。
+              </p>
             )}
-            <button className="button" type="submit">
-              <Search size={16} />
-              {busy ? "正在计算…" : "运行分析"}
-            </button>
-          </fieldset>
-        </form>
-        {kind === "comparison" && (
-          <p className="analytics-hint">
-            两个期间必须天数相同且不重叠。变化贡献用于定位线索，不代表因果。
-          </p>
-        )}
-      </section>
+          </section>
+        </>
+      )}
       {error && (
         <div className="analytics-error" role="alert">
           {error}
@@ -578,7 +631,39 @@ export function Analytics() {
             </div>
           )}
           {result.results.map((item, index) =>
-            item.kind === "growth" ? (
+            item.kind === "stocking" ? (
+              <StockingResult
+                key={`${result.run_id}-${index}`}
+                result={item}
+                step={result.plan.steps[index]}
+              />
+            ) : item.kind === "inventory_risk" ? (
+              <InventoryRiskResult
+                key={`${result.run_id}-${index}`}
+                result={item}
+                step={result.plan.steps[index]}
+              />
+            ) : item.kind === "margin" ? (
+              <MarginResult
+                key={`${result.run_id}-${index}`}
+                result={item}
+                step={result.plan.steps[index]}
+                busy={busy}
+                onRun={(step) => {
+                  void submit("run", { steps: [step] });
+                }}
+              />
+            ) : item.kind === "price" ? (
+              <PriceResult
+                key={`${result.run_id}-${index}`}
+                result={item}
+                step={result.plan.steps[index]}
+                busy={busy}
+                onRun={(step) => {
+                  void submit("run", { steps: [step] });
+                }}
+              />
+            ) : item.kind === "growth" ? (
               <GrowthResult
                 key={`${result.run_id}-${index}`}
                 result={item}

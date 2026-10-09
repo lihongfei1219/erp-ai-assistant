@@ -64,7 +64,8 @@ def with_operations(report):
             ],
         ),
     )
-    return report.model_copy(update={"operations": operations})
+    from tests.inventory_fixtures import add_risk
+    return add_risk(report.model_copy(update={"operations": operations}))
 
 
 def growth_history():
@@ -72,10 +73,12 @@ def growth_history():
     from pathlib import Path
 
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
-    from tests.growth_fixtures import part
+    from tests.growth_fixtures import part, with_cost
 
-    return [
+    parts = [
         part("2026-08-01", "2026-09-01", [("A", "100"), ("B", "20"), ("C", "40")], 100),
         part("2026-07-01", "2026-08-01", [("A", "60"), ("B", "40")], 200),
         part("2025-08-01", "2025-09-01", [("A", "200")], 300),
     ]
+
+    return [with_cost(p, "0.9" if index == 0 else "0.5") for index, p in enumerate(parts)]

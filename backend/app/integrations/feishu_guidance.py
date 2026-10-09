@@ -5,6 +5,12 @@ from zoneinfo import ZoneInfo
 
 from app.analysis.analytics import available_dates
 from app.analysis.operations import DOMAIN_LABELS, domain_dates, executable_domains
+from app.integrations.feishu_conversation import (
+    MAX_CONVERSATION_ROUNDS,
+    conversation_closed,
+    round_count,
+    round_notice,
+)
 from app.integrations.feishu_display_components import panel, text
 from app.semantic.dialogue_schemas import DialogueTurn
 
@@ -20,6 +26,28 @@ def render_guidance(payload):
         if payload.get("dialogue_turn")
         else None
     )
+    if conversation_closed(payload):
+        sections = [round_notice(payload)]
+        sections.append(payload.get("notice") or (
+            "当前条件尚未形成可执行的分析。请把日期、分析指标及品种或客户范围"
+            "合在一条完整消息中重新提问。"
+        ))
+        details = []
+        if turn:
+            details.append("本次已理解的需求（供重新提问时参考）\n" + turn.understood_summary)
+            if turn.clarification:
+                details.append("尚未解决的事项\n" + turn.clarification.question)
+        elements = [text(section) for section in sections]
+        if details:
+            elements.append(panel("查看本次需求与未解决事项", "\n\n".join(details)))
+        title = "本次对话已结束"
+        card = {
+            "schema": "2.0",
+            "config": {"width_mode": "fill", "summary": {"content": title}},
+            "header": {"template": "blue", "title": {"tag": "plain_text", "content": title}},
+            "body": {"padding": "12px", "vertical_spacing": "8px", "elements": elements},
+        }
+        return {"semantic_status": payload["status"], "reply_card": card}, "\n\n".join(sections)
     title = "确认一下你的想法"
     sections, details = [], []
     if payload.get("notice"):
@@ -41,7 +69,7 @@ def render_guidance(payload):
             growth = bool(
                 selected
                 and selected.fields.get("domain") == "shipping"
-                and selected.fields.get("operation") == "growth"
+                and selected.fields.get("operation") in {"growth", "price", "margin"}
             )
             details.append("待确认事项\n" + question)
             if len(question) > 100 and numbered_choices(turn) and not growth:
@@ -89,8 +117,11 @@ def render_guidance(payload):
     if turn and numbered_choices(turn) and payload.get("number_reply_allowed", True):
         reply = "再次 @我 回复编号，以最新一张提问卡片为准；都不是，也可以直接用文字说明。"
     sections.append(reply)
+    if "conversation_round" in payload:
+        sections.insert(0, f"本次对话第 {round_count(payload)}/{MAX_CONVERSATION_ROUNDS} 轮")
     details.append(
-        "已明确的条件会保留，不用重写整个问题。上下文保留30分钟；发送“重新开始”开启新话题。"
+        "已明确的条件会保留，不用重写整个问题。上下文保留30分钟，连续会话最多5轮"
+        "（首次提问和结果后的追问都计入）；发送“重新开始”开启新话题。"
     )
     elements = [text(section) for section in sections]
     elements.append(panel("查看已保留的条件与说明", "\n\n".join(details)))
@@ -138,6 +169,8 @@ def help_text(report):
         + "\n\n收到引导后，再次 @我 补充日期、指标或想修改的条件即可；不用重复整个问题。"
         "建议只是可选方向，不会未经确认删除你的筛选条件或改查其他指标。"
         "\n也可以同时提出多个目标；暂不支持的计算或条件会单独说明。"
-        "\n30分钟内可继续追问；@我 发送“重新开始”开启新话题，发送“数据范围”查看可用日期。"
+        "\n上下文保留30分钟，连续会话最多5轮（首次提问和结果后的追问都计入）。"
+        "第5轮处理后结束，下一条完整问题开启新会话。"
+        "@我 发送“重新开始”可提前开启新话题，发送“数据范围”查看可用日期；这些操作不占分析轮次。"
         "\n“药品”泛称按当前商品范围统计，未按药品类别筛选；“卖得好”默认销售金额前10。"
     ) + fallback

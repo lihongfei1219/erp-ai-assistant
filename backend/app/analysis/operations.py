@@ -30,7 +30,22 @@ def domain_dates(report, domain):
 
 
 def validate_operation_step(report, step):
-    if step.kind == "growth":
+    if step.kind == "stocking":
+        from app.analysis.stocking import validate_stocking
+
+        validate_stocking(report, step)
+        return
+    if step.kind == "inventory_risk":
+        from app.analysis.inventory_risk import validate_inventory_risk
+
+        validate_inventory_risk(report, step)
+        return
+    if step.kind == "margin":
+        from app.analysis.costs import validate_margin
+
+        validate_margin(report, step)
+        return
+    if step.kind in {"growth", "price"}:
         from app.analysis.growth import validate_growth
 
         validate_growth(report, step)
@@ -167,6 +182,22 @@ def _trend(records, step):
 
 
 def execute_operation(report, step):
+    if step.kind == "stocking":
+        from app.analysis.stocking import execute_stocking
+
+        return execute_stocking(report, step)
+    if step.kind == "inventory_risk":
+        from app.analysis.inventory_risk import execute_inventory_risk
+
+        return execute_inventory_risk(report, step)
+    if step.kind == "margin":
+        from app.analysis.margin import execute_margin
+
+        return execute_margin(report, step)
+    if step.kind == "price":
+        from app.analysis.price import execute_price
+
+        return execute_price(report, step)
     if step.kind == "growth":
         from app.analysis.growth import execute_growth
 

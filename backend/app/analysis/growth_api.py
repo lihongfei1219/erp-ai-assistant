@@ -60,11 +60,16 @@ def manual_context(plan, report, secret):
 
 
 def evidence(report, body):
-    if body.step.kind != "growth":
+    if body.step.kind not in {"growth", "price", "margin"}:
         raise QueryUnavailable("此接口只支持品种变化证据")
     validate_plan(report, AnalysisPlan(steps=[body.step]))
     validate_operations(report)
-    periods = validate_growth(report, body.step)
+    if body.step.kind == "margin":
+        from app.analysis.costs import validate_margin
+
+        periods = validate_margin(report, body.step)
+    else:
+        periods = validate_growth(report, body.step)
     if body.period not in periods:
         raise QueryUnavailable("该比较期不属于当前分析")
     rows = []
@@ -100,19 +105,31 @@ def register_growth_routes(router, get_report):
 
     Report = Annotated[SalesReport, Depends(get_report)]
 
+    @router.post("/analysis/margin/export")
+    @router.post("/analysis/price/export")
     @router.post("/analysis/growth/export")
     def growth_export(step: AnalysisStep, report: Report):
         from app.analysis.growth import execute_growth
 
         try:
-            if step.kind != "growth":
+            if step.kind not in {"growth", "price", "margin"}:
                 raise QueryUnavailable("只支持品种变化导出")
             validate_plan(report, AnalysisPlan(steps=[step]))
             validate_operations(report)
+            if step.kind == "margin":
+                from app.analysis.margin import execute_margin
+
+                return execute_margin(report, step, full=True)
+            if step.kind == "price":
+                from app.analysis.price import execute_price
+
+                return execute_price(report, step, full=True)
             return execute_growth(report, step, full=True)
         except QueryUnavailable as exc:
             raise HTTPException(422, str(exc)) from None
 
+    @router.post("/analysis/margin/evidence")
+    @router.post("/analysis/price/evidence")
     @router.post("/analysis/growth/evidence")
     def growth_evidence(body: GrowthEvidenceRequest, report: Report):
         try:

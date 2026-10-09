@@ -100,8 +100,28 @@ def capability_view(report):
             item.update(available_start=start.isoformat(), available_end_exclusive=end.isoformat())
         if executable and domain == "inventory":
             item["snapshot_as_of"] = report.operations.inventory.as_of.isoformat()
+            item["inventory_risk_ready"] = report.operations.inventory.risk_ready
+            if not report.operations.inventory.risk_ready:
+                item["operations"] = [
+                    op for op in item["operations"] if op not in {"inventory_risk", "stocking"}
+                ]
+                item["capabilities"] = [
+                    c
+                    for c in item["capabilities"]
+                    if c["kind"] not in {"inventory_risk", "stocking"}
+                ]
         if executable and domain == "shipping":
+            from app.analysis.costs import cost_coverage
             from app.analysis.growth import coverage
+
+            cost_intervals = cost_coverage(report)
+            item["cost_coverage"] = [
+                dict(start=a.isoformat(), end_exclusive=b.isoformat()) for a, b in cost_intervals
+            ]
+            if not cost_intervals:
+                item["metrics"] = [metric for metric in item["metrics"] if metric != "gross_profit"]
+                item["operations"] = [op for op in item["operations"] if op != "margin"]
+                item["capabilities"] = [c for c in item["capabilities"] if c["kind"] != "margin"]
 
             intervals = coverage(report)
             item["growth_coverage"] = [
@@ -109,8 +129,13 @@ def capability_view(report):
                 for start, end in sorted(intervals)
             ]
             if not intervals:
-                item["operations"] = [op for op in item["operations"] if op != "growth"]
-                item["capabilities"] = [c for c in item["capabilities"] if c["kind"] != "growth"]
+                item["metrics"] = [metric for metric in item["metrics"] if metric != "unit_price"]
+                item["operations"] = [
+                    op for op in item["operations"] if op not in {"growth", "price"}
+                ]
+                item["capabilities"] = [
+                    c for c in item["capabilities"] if c["kind"] not in {"growth", "price"}
+                ]
         item["filter_fields"] = list(FILTER_FIELDS[domain]) if item["executable"] else []
         domains[domain] = item
     return {

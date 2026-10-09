@@ -44,7 +44,9 @@ def _period(step) -> str:
     return value
 
 
-def _card(response: AnalysisResponse, row_limit: int, charts: bool) -> dict:
+def _card(
+    response: AnalysisResponse, row_limit: int, charts: bool, conversation_notice: str | None = None
+) -> dict:
     p = response.provenance
     scope = "全平台采购企业" if p.scope.all_buyers else "当前授权采购企业范围"
     source = "合成样例" if p.source_kind == "synthetic" else "历史备份"
@@ -149,8 +151,10 @@ def _card(response: AnalysisResponse, row_limit: int, charts: bool) -> dict:
         panel("统计口径与数据说明", "\n\n".join(explanation)),
         text(f"查询编号 {response.run_id}", muted=True),
         text(
-            "30分钟内可在本群继续 @我，说明想修改的条件或接着想了解什么；"
-            "如需开始新话题，发送“重新开始”。", muted=True,
+            conversation_notice or (
+                "30分钟内可在本群继续 @我，说明想修改的条件或接着想了解什么；"
+                "如需开始新话题，发送“重新开始”。"
+            ), muted=True,
         ),
     ]
     title = response.results[0].title if len(response.results) == 1 else "AI 数据分析"
@@ -166,14 +170,16 @@ def _card(response: AnalysisResponse, row_limit: int, charts: bool) -> dict:
     }
 
 
-def render_analysis(response: AnalysisResponse) -> tuple[dict, str]:
+def render_analysis(
+    response: AnalysisResponse, *, conversation_notice: str | None = None
+) -> tuple[dict, str]:
     # Remove optional graphics before reducing rows. Full results stay in storage.
     for row_limit in ROW_LIMITS:
         for charts in (True, False) if row_limit == ROW_LIMITS[0] else (False,):
-            card = _card(response, row_limit, charts)
+            card = _card(response, row_limit, charts, conversation_notice)
             if (
                 element_count(card) <= MAX_ELEMENTS
                 and len(json.dumps(card, ensure_ascii=False).encode("utf-8")) <= MAX_CARD_BYTES
             ):
-                return card, "\n\n".join(_blocks(response, row_limit))
+                return card, "\n\n".join(_blocks(response, row_limit, conversation_notice))
     raise ValueError("分析卡片超出展示范围，请缩小问题范围")

@@ -54,6 +54,10 @@ async function enter(page: Page) {
   });
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "自由问数", exact: true })
+    .click();
   await expect(page.getByLabel("开始日期", { exact: true })).toHaveValue(
     "2026-09-01",
   );

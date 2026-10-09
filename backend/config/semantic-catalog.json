@@ -54,19 +54,23 @@
       "label": "出库",
       "operations": [
         "growth",
+        "price",
         "summary",
         "trend",
         "ranking",
         "list",
-        "existence"
+        "existence",
+        "margin"
       ],
       "metrics": [
         "amount",
         "orders",
-        "quantity"
+        "quantity",
+        "unit_price",
+        "gross_profit"
       ],
       "unavailable_message": "已理解出库需求；当前快照尚未接入出库事实，请重新取数生成包含该业务的新快照。",
-      "definition": "当前支持已确认的销售出库，按出库确认日期统计，amount为出库单金额，orders为出库单数，quantity为实际出库明细数量且按单位分别统计。采购退出、销毁等其他出库类型暂未接入；明确这些类型时必须保留筛选。"
+      "definition": "当前支持已确认的销售出库，按出库确认日期统计，amount为出库单金额，orders为出库单数，quantity为实际出库明细数量且按单位分别统计。price分析的unit_price为同编码、规格、厂家和单位的出库金额合计除以数量合计，未扣退货、税额未拆分，不等于实际调价或毛利。采购退出、销毁等其他出库类型暂未接入；明确这些类型时必须保留筛选。 margin的gross_profit是出库金额减去行内保存采购单价乘数量的毛利，未扣退货、税额未拆分，不等于财务净利润。"
     },
     "inventory": {
       "label": "库存",
@@ -75,7 +79,9 @@
         "ranking",
         "list",
         "existence",
-        "trend"
+        "trend",
+        "inventory_risk",
+        "stocking"
       ],
       "metrics": [
         "stock",
@@ -83,7 +89,7 @@
         "turnover"
       ],
       "unavailable_message": "已理解库存需求；当前快照尚未接入库存事实，请重新取数生成包含该业务的新快照。",
-      "definition": "商品批次库存余额，只支持备份截至时点，不是实时或该日日末库存。stock和quantity均按单位分别统计、分别排行，不能跨天求和；仓库维度、历史趋势、动销与周转尚未接入。库存多且卖得慢是相互依赖条件，不能拆为无关查询。"
+      "definition": "商品批次库存余额，只支持备份截至时点，不是实时或该日日末库存。stock和quantity均按单位分别统计、分别排行，不能跨天求和；仓库维度、历史趋势、动销与周转尚未接入。库存多且卖得慢是相互依赖条件，不能拆为无关查询。 库存积压分析以备份时点计算入库库龄、采购成本占用和效期关注，使用完整历史出库量估算先到期先售出下的售完天数，默认观察30天、库龄90天和剩余效期180天，阈值可调整。 旺季备货stocking的time指计划目标期间，不是未来库存查询：读取备份时点库存和去年同期、近期出库作为参考；在途、供货周期等需要到网页按品种手动填写后测算，不支持从自然语言自动填入或忽略这些条件。"
     }
   },
   "defaults": {

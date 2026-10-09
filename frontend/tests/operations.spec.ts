@@ -58,6 +58,10 @@ test("business results preserve units, titles and source evidence without sales 
   );
   await page.goto("/");
   await page.getByRole("button", { name: "AI 数据分析", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "AI 数据分析子栏目" })
+    .getByRole("button", { name: "自由问数", exact: true })
+    .click();
   await expect(
     page.getByText(
       "支持自由提问；当前快照可分析：销售、退货、销售出库、库存。",
@@ -71,7 +75,7 @@ test("business results preserve units, titles and source evidence without sales 
   await expect(output).toContainText("退货概览");
   await expect(output).toContainText("销售出库明细");
   await expect(output).toContainText("库存商品排行");
-  await expect(output).toContainText("12.0000");
+  await expect(output).toContainText("35.0000");
   await expect(output).toContainText("盒");
   await expect(output).toContainText("不是实时或日末库存");
   await expect(output.getByRole("button", { name: "查看证据" })).toHaveCount(0);

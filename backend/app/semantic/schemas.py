@@ -19,12 +19,18 @@ Operation = Literal[
     "list",
     "existence",
     "growth",
+    "price",
+    "margin",
+    "inventory_risk",
+    "stocking",
     "unknown",
 ]
 Metric = Literal[
     "amount",
     "orders",
     "quantity",
+    "unit_price",
+    "gross_profit",
     "return_rate",
     "stock",
     "turnover",
@@ -56,6 +62,9 @@ class SemanticIntent(StrictModel):
     growth_basis: Literal["both", "previous", "year_over_year"] | None = None
     growth_direction: Literal["both", "increase", "decrease"] | None = None
     growth_sort: Literal["delta", "rate"] | None = None
+    lookback_days: int | None = Field(default=None, ge=7, le=90, strict=True)
+    age_threshold_days: int | None = Field(default=None, ge=1, le=3650, strict=True)
+    expiry_threshold_days: int | None = Field(default=None, ge=1, le=730, strict=True)
     limit: int | None = Field(default=None, ge=1, le=MAX_ITEMS, strict=True)
     order: Literal["descending", "ascending"] | None = None
     scope: Literal["authorized", "all_buyers"] | None = None

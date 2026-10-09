@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from app.analysis.sales_query import QueryUnavailable
 from app.core.environment import configured_path
+from app.core.timeouts import GRAPH_EXECUTION_LEASE
 from app.semantic.schemas import GraphReference, SemanticContext
 
 GRAPH_VERSION = "erp.graph.v1"
@@ -86,7 +87,10 @@ class GraphStore:
                 active = conn.execute(
                     "SELECT busy_since FROM sessions WHERE thread_id=?", (old["thread_id"],)
                 ).fetchone()
-                if not active or active["busy_since"] is None or now - active["busy_since"] >= 60:
+                if (
+                    not active or active["busy_since"] is None
+                    or now - active["busy_since"] >= GRAPH_EXECUTION_LEASE
+                ):
                     raise GraphConflict(
                         "上次请求的执行状态未能确认，请点击重试重新提交。", "request_failed"
                     )
@@ -105,7 +109,7 @@ class GraphStore:
                 ):
                     raise GraphConflict("会话已更新或过期，请恢复当前草稿后继续。")
                 if session["busy_request"]:
-                    if now - session["busy_since"] < 60:
+                    if now - session["busy_since"] < GRAPH_EXECUTION_LEASE:
                         raise GraphConflict("上一条请求仍在处理，请稍后再提交。", "request_busy")
                     conn.execute(
                         "UPDATE requests SET status='failed' WHERE owner=? AND request_id=?",
@@ -218,7 +222,7 @@ class GraphStore:
                 for row in conn.execute(
                     "SELECT thread_id FROM sessions WHERE expires<? "
                     "AND (busy_request IS NULL OR busy_since<?) LIMIT 50",
-                    (time.time(), time.time() - 60),
+                    (time.time(), time.time() - GRAPH_EXECUTION_LEASE),
                 )
             ]
 

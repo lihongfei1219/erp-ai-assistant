@@ -32,7 +32,7 @@ import {
   type OrdersPage,
 } from "./api";
 import { FeishuDaily } from "./FeishuDaily";
-import { Analytics } from "./Analytics";
+import { AnalyticsHub } from "./AnalyticsHub";
 
 type Page = "overview" | "orders" | "rules" | "feishu" | "analytics";
 type View = "operating" | "all";
@@ -180,7 +180,7 @@ export function App() {
               </h1>
               <p>
                 {page === "analytics"
-                  ? "从问题到数据、图表与可核验的结论。"
+                  ? "围绕六个经营问题，从品种变化到库存与收益，逐项看清经营表现。"
                   : page === "overview"
                     ? "从平台订单出发，看清经营表现与成交结构。"
                     : page === "orders"
@@ -223,20 +223,36 @@ export function App() {
             <>
               <div className="rangebar">
                 <div>
-                  <CalendarDays size={17} />
-                  <strong>
-                    {data.metadata.window.start} —{" "}
-                    {previousDay(data.metadata.window.end)}
-                  </strong>
-                  <span className="divider" />
-                  <span>
-                    {data.metadata.scope.all_buyers
-                      ? "全平台采购企业"
-                      : `已授权 ${data.metadata.scope.buyer_codes.length} 家采购企业`}
-                  </span>
+                  {page === "analytics" ? (
+                    <>
+                      <Building2 size={17} aria-hidden />
+                      <strong>
+                        分析范围：
+                        {data.metadata.scope.all_buyers
+                          ? "公司整体（全平台）"
+                          : `已授权 ${data.metadata.scope.buyer_codes.length} 家采购企业`}
+                      </strong>
+                      <span className="divider" />
+                      <span>分析期间以下方查询条件为准</span>
+                    </>
+                  ) : (
+                    <>
+                      <CalendarDays size={17} />
+                      <strong>
+                        {data.metadata.window.start} —{" "}
+                        {previousDay(data.metadata.window.end)}
+                      </strong>
+                      <span className="divider" />
+                      <span>
+                        {data.metadata.scope.all_buyers
+                          ? "全平台采购企业"
+                          : `已授权 ${data.metadata.scope.buyer_codes.length} 家采购企业`}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <span>
-                  数据截至{" "}
+                  {page === "analytics" ? "备份截至" : "数据截至"}{" "}
                   {timestamp(
                     data.metadata.source_as_of,
                     data.operating.policy.business_timezone,
@@ -246,8 +262,14 @@ export function App() {
               <div className="notice">
                 <Info size={17} />
                 <span>
-                  当前按暂定业务口径统计；{data.operating.policy.currency}
-                  、订单状态可后续调整。数据为备份快照，当日可能不完整。
+                  {page === "analytics" ? (
+                    "数据来自备份快照，不代表实时经营情况。各主题的可查日期及统计口径以对应分析说明为准。"
+                  ) : (
+                    <>
+                      当前按暂定业务口径统计；{data.operating.policy.currency}
+                      、订单状态可后续调整。数据为备份快照，当日可能不完整。
+                    </>
+                  )}
                 </span>
                 <button onClick={() => setPage("rules")}>
                   查看口径 <ArrowUpRight size={14} />
@@ -294,7 +316,7 @@ export function App() {
               )}
               {page === "rules" && <Rules data={data} />}
               {page === "feishu" && <FeishuDaily key={attempt} />}
-              {page === "analytics" && <Analytics key={attempt} />}
+              {page === "analytics" && <AnalyticsHub key={attempt} />}
               <footer>
                 <span>
                   <ShieldCheck size={13} /> 来源：ERP 销售订单 ·

@@ -198,3 +198,23 @@ def growth_report(multi_report):
         part("2025-08-01", "2025-09-01", [("A", "200")], 300),
     ]
     return multi_report.model_copy(update={"operations": OperationsSnapshot.model_validate(data)})
+
+
+@pytest.fixture
+def margin_report(growth_report):
+    from app.schemas.operations import OperationsSnapshot
+    from tests.growth_fixtures import with_cost
+
+    data = growth_report.operations.model_dump()
+    data["shipping_history"] = [
+        with_cost(part, "0.9" if index == 0 else "0.5")
+        for index, part in enumerate(growth_report.operations.shipping_history)
+    ]
+    return growth_report.model_copy(update={"operations": OperationsSnapshot.model_validate(data)})
+
+
+@pytest.fixture
+def risk_report(margin_report):
+    from tests.inventory_fixtures import add_risk
+
+    return add_risk(margin_report)

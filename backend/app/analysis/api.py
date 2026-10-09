@@ -37,6 +37,12 @@ def register_analysis_routes(router, get_report, planner=None, *, context_secret
     from app.analysis.growth_api import manual_context, register_growth_routes
 
     register_growth_routes(router, get_report)
+    from app.analysis.inventory_risk_api import register_inventory_risk_routes
+
+    register_inventory_risk_routes(router, get_report)
+    from app.analysis.stocking_api import register_stocking_routes
+
+    register_stocking_routes(router, get_report)
     Report = Annotated[SalesReport, Depends(get_report)]
 
     def get_planner():
@@ -109,7 +115,7 @@ def register_analysis_routes(router, get_report, planner=None, *, context_secret
     def run(plan: AnalysisPlan, report: Report):
         try:
             result = execute_analysis(report, plan)
-            if any(step.kind == "growth" for step in plan.steps):
+            if any(step.kind in {"growth", "price", "margin"} for step in plan.steps):
                 result = result.model_copy(update={
                     "conversation_token": manual_context(plan, report, context_secret)
                 })

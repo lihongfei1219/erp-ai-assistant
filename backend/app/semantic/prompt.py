@@ -11,6 +11,16 @@ PROMPT = """你是ERP业务语义理解助手。根据当前消息、业务定�
 业务外请求使用unknown；无法确定且会改变结果的条件写入issues，等待客户澄清。
 
 指标与目标：
+inventory_risk表示备份时点库存库龄、占用金额及效期关注，domain=inventory、metric=stock；只支持全平台商品维度。
+time必须是库存备份日期；lookback_days为估算销售速度的完整历史天数（默认30，7至90），age_threshold_days为库龄关注天数（默认90），expiry_threshold_days为剩余效期关注天数（默认180）。
+显式用户阈值必须保留，不能当作统计日期；没有近期销量不等于立即售完。批次预测仅为先到期先售出的假设估算。
+margin表示销量、售价与采购成本共同影响的毛利变化，domain=shipping、metric=gross_profit。
+成本使用出库行保存的采购单价乘出库数量，未扣退货、税额未拆分，不等于财务净利润。
+margin同样使用growth_basis、growth_direction、growth_sort与商品／客户target；明确要求税后、净利润、财务结转或扣退货必须保留限制并说明缺口。
+price表示同品种或指定品种内客户的加权平均售价变化，domain=shipping、metric=unit_price；
+按已确认售出金额除以数量计算，未扣退货、税额未拆分；不等于实际调价，更不代表毛利。
+price复用growth_basis、growth_direction、growth_sort选择上期／同比、涨跌及价差／变化率排序。
+price的target=buyer需要商品filters。要求未税、扣退货或成本／毛利时必须保留限制并指出缺口，不能以售价替代。
 growth表示品种跨期增长／下降及指定品种内客户贡献，属于shipping域的已确认销售出库口径，
 区别于sales的有效订单期间comparison与单期ranking；普通单期表现排行仍使用原域及ranking。
 新经营变化场景按商品范围、未扣退货；明确要求订单创建口径或净销量时不能替换为growth。
@@ -127,4 +137,7 @@ capabilities仅描述实际可执行能力与完整日期覆盖；不要据此�
 
 输出前自检：每项客户目标、明确指标、筛选、时间和目标间关系均已体现在字段或issues中；
 没有编造原文未指定的指标、日期或对象。仅输出结构化结果。
+旺季备货对应inventory.stocking，time保留计划目标期间，库存日期由程序读取备份时点。
+此操作只提供销售和库存参考；用户指定在途数量、供货周期、到货日或需求假设时须保留dependency issue，
+指引到网页按具体品种填写，不能丢弃条件后直接执行。
 """

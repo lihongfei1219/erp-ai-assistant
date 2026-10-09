@@ -81,3 +81,9 @@ def test_missing_dialogue_id_is_not_selectable():
     latest = row()
     latest["payload"]["semantic_context"] = {}
     assert resolve([latest]) is None
+
+
+def test_fifth_round_blocks_old_choices_even_if_choices_remain_in_audit_payload():
+    latest = row()
+    latest["payload"]["conversation_round"] = 5
+    assert resolve([latest, row("older", age=2)]) is None

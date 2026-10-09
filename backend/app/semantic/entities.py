@@ -40,7 +40,9 @@ def bind_entities(compiled, report):
                     }
                 continue
             variant = prior.get("variant") if prior else None
-            if variant and (step.kind != "growth" or condition.operator == "exclude"):
+            if variant and (
+                step.kind not in {"growth", "price", "margin"} or condition.operator == "exclude"
+            ):
                 return Compilation(
                     "clarify",
                     compiled.context,

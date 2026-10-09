@@ -39,6 +39,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--start", type=date.fromisoformat, required=True)
     parser.add_argument("--end", type=date.fromisoformat, required=True)
+    parser.add_argument("--with-cost", action="store_true", help="核验并保留出库行保存的采购单价")
     args = parser.parse_args()
     if args.output.exists():
         parser.error("输出已存在，不能覆盖")
@@ -53,6 +54,7 @@ def main():
             engine,
             report,
             [AnalysisWindow(start=primary.start, end=primary.end_exclusive), *windows],
+            costs=args.with_cost,
         )
         data = report.operations.model_dump()
         data["shipping"] = parts[0]

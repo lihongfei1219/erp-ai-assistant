@@ -11,6 +11,7 @@ from langgraph.types import Command
 from langsmith import tracing_context
 
 from app.analysis.dialogue import DialogueOutcome, legacy_converse
+from app.core.timeouts import ANALYSIS_TIMEOUT
 from app.orchestration.graph import TurnRuntime, build_graph
 from app.orchestration.store import GRAPH_VERSION, GraphConflict, GraphStore, owner_key
 from app.semantic.catalog import load_catalog
@@ -91,7 +92,7 @@ async def run_dialogue(
                         "request_id": ticket["request_id"],
                     }
                 )
-                async with asyncio.timeout(45):
+                async with asyncio.timeout(ANALYSIS_TIMEOUT):
                     state = await graph.ainvoke(
                         inputs,
                         config,

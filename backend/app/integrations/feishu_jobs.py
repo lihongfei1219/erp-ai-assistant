@@ -9,6 +9,7 @@ from datetime import timedelta
 import pyodbc
 
 from app.core.environment import environment
+from app.integrations.feishu_conversation import conversation_closed
 
 ASSISTANT_DATABASE = "ERP_AI_Assistant"
 DEFAULT_ASSISTANT_ODBC = (
@@ -47,6 +48,7 @@ def numbered_choice_context(rows: list[dict], arrived_at) -> dict | None:
         or payload.get("kind") != "semantic_notice"
         or not latest.get("result", {}).get("semantic_status")
         or not payload.get("dialogue_turn", {}).get("choices")
+        or conversation_closed(payload)
     ):
         return None
     return payload if payload.get("semantic_context", {}).get("dialogue_id") else None

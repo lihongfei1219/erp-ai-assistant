@@ -78,3 +78,19 @@
 | 库存 | `SPPHGLBH.KCSL`，`SPBM→HGJYSPDAH.SPBM`取得名称和`DW`单位，保留`SPPC`批次 | 1578批次记录，206条正库存；商品／单位／数量无缺失且无负数。仅备份时点余额，不按`RKRQ`倒推历史库存；未映射仓库，空表`BQKWBH`不能说明零库存 |
 
 事实包保留SQL控制单据数、行数、金额及各单位数量，加载与执行重新校验。库存仅随全平台授权快照提取。不同域单据键互不等价，来源号带业务域前缀，不跳转同号销售订单。
+
+
+## 出库成本与库存效期扩展（2026-10-09）
+
+| 事实字段 | 原始来源 | 校验与用途 |
+|---|---|---|
+| `DocumentLine.purchase_unit_cost` | `CKFHQRB.CGJ`，原出库行保存采购单价 | 可空以兼容旧快照；不得用当前采购价回填历史。成本=单价×原行数量 |
+| `DocumentFacts.cost_ready / control_purchase_cost` | 独立SQL汇总`SUM(CGJ * SL)` | 仅与`comparison_ready`同时启用，明细成本逐段等于SQL控制成本，已启用时不允许缺成本 |
+| `StockRecord.specification / manufacturer` | `HGJYSPDAH.GG / SCCS`，按商品编码关联 | 库存与历史出库按编码＋规格＋厂家＋单位比较，档案属性与历史不一致时不可直接视为无销售 |
+| `received_date / expiry_date` | `SPPHGLBH.RKRQ / YXQZ`，转换为日期 | 相对库存备份时点计算库龄和效期；效期缺失不当作无限期或过期 |
+| `StockRecord.purchase_unit_cost` | `SPPHGLBH.CGJ` | 用于批次采购成本占用，缺失单列；不能用无有效值的`JZJ`或推定借款代替 |
+| `InventoryFacts.risk_ready / control_known_cost` | SQL独立`SUM(KCSL * CGJ)`及既有数量／条数控制 | 记录已知成本总额；缺成本库存单列，不把已知部分当完整总额 |
+
+新版快照保留旧快照和历史分区，分别由`extend_shipping_history --with-cost`、`extend_inventory_risk`生成全新文件，不覆盖原文件。出库行成本核验和财务边界见[业务假设 B25](business-assumptions.md)。库存批次按编码、规格、厂家、单位、批号、入库日、到期日和成本分组合并，保留全部原记录ID用于核对，不通过销售关联放大行数。
+
+旺季备货不读取采购订单差额作为有效在途：在途数量、预计到货日、供货周期与可选目标需求是用户输入的情景参数，输入与快照事实分别返回。事实来自已对账出库历史和同一备份的库存；结果不写回ERP。资金收益尚未接入，详见业务假设 B27—B28。

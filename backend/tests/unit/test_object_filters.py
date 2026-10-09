@@ -94,7 +94,11 @@ def test_union_exclusion_and_cross_field_intersection(multi_report):
 
 
 @pytest.mark.parametrize("cap", list(REGISTRY.values()), ids=lambda c: c.id)
-def test_all_registered_analyses_accept_supported_product_filters(multi_report, growth_report, cap):
+def test_all_registered_analyses_accept_supported_product_filters(
+    multi_report, growth_report, margin_report, risk_report, cap
+):
+    if cap.kind in {"inventory_risk", "stocking"}:
+        multi_report = risk_report
     start, _ = date_bounds(multi_report, cap.domain)
     from datetime import timedelta
 
@@ -106,10 +110,17 @@ def test_all_registered_analyses_accept_supported_product_filters(multi_report, 
         end_date_exclusive=start + timedelta(days=1),
         filters=[condition("SKU-A" if cap.domain == "sales" else "A")],
     )
-    if cap.kind == "growth":
+    if cap.kind in {"inventory_risk", "stocking"}:
+        values["filters"] = [condition("P")]
+    if cap.kind == "margin":
+        growth_report = margin_report
+    if cap.kind in {"growth", "price", "margin"}:
         multi_report = growth_report
-        values.update(start_date="2026-08-01", end_date_exclusive="2026-09-01",
-                      filters=[condition("P")])
+        values.update(
+            start_date="2026-08-01", end_date_exclusive="2026-09-01", filters=[condition("P")]
+        )
+    if cap.kind == "stocking":
+        values.update(start_date="2026-09-17", end_date_exclusive="2026-09-24")
     if cap.kind == "comparison":
         values.update(
             comparison_start_date=start + timedelta(days=1),

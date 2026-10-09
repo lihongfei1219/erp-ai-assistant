@@ -163,7 +163,7 @@ export function GrowthExport({ step }: { step: AnalysisStep }) {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch("/api/v1/analysis/growth/export", {
+      const response = await fetch(`/api/v1/analysis/${step.kind}/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(step),
@@ -180,7 +180,7 @@ export function GrowthExport({ step }: { step: AnalysisStep }) {
       );
       const link = document.createElement("a");
       link.href = url;
-      link.download = `品种变化完整明细-${step.start_date}.json`;
+      link.download = `${step.kind === "margin" ? "销量毛利" : step.kind === "price" ? "售价变化" : "品种变化"}完整明细-${step.start_date}.json`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (cause) {
@@ -227,7 +227,7 @@ export function GrowthActions({
     const controller = new AbortController();
     setData(null);
     setError("");
-    fetch("/api/v1/analysis/growth/evidence", {
+    fetch(`/api/v1/analysis/${step.kind}/evidence`, {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
@@ -290,7 +290,11 @@ export function GrowthActions({
           }
         >
           <Users size={15} aria-hidden="true" />
-          查看客户贡献
+          {step.kind === "margin"
+            ? "查看客户毛利"
+            : step.kind === "price"
+              ? "查看客户售价"
+              : "查看客户贡献"}
         </button>
       )}
       <button className="analytics-evidence" onClick={() => setOpened(true)}>
@@ -350,6 +354,7 @@ export function GrowthActions({
                           "数量",
                           "单位",
                           "金额",
+                          ...(step.kind === "growth" ? [] : ["保存的采购单价"]),
                           "来源",
                         ].map((label) => (
                           <th key={label}>{label}</th>
@@ -366,6 +371,9 @@ export function GrowthActions({
                             "quantity",
                             "unit",
                             "amount",
+                            ...(step.kind === "growth"
+                              ? []
+                              : ["purchase_unit_cost"]),
                             "source",
                           ].map((key) => (
                             <td key={key}>{String(item[key] ?? "")}</td>

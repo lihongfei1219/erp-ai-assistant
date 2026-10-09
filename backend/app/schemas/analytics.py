@@ -18,6 +18,10 @@ AnalysisKind = Literal[
     "list",
     "existence",
     "growth",
+    "price",
+    "margin",
+    "inventory_risk",
+    "stocking",
 ]
 BusinessDomain = Literal["sales", "returns", "shipping", "inventory"]
 
@@ -40,7 +44,9 @@ class AnalysisStep(StrictModel):
     kind: AnalysisKind
     start_date: date
     end_date_exclusive: date
-    metric: Literal["amount", "orders", "quantity", "stock"] = "amount"
+    metric: Literal["amount", "orders", "quantity", "stock", "unit_price", "gross_profit"] = (
+        "amount"
+    )
     order: Literal["descending", "ascending"] = "descending"
     top_n: int = Field(default=DEFAULT_ITEMS, ge=1, le=MAX_ITEMS, strict=True)
     dimension: Literal["product", "buyer"] = "product"
@@ -50,12 +56,19 @@ class AnalysisStep(StrictModel):
     growth_basis: Literal["both", "previous", "year_over_year"] = "both"
     growth_direction: Literal["both", "increase", "decrease"] = "both"
     growth_sort: Literal["delta", "rate"] = "delta"
+    lookback_days: int = Field(default=30, ge=7, le=90, strict=True)
+    age_threshold_days: int = Field(default=90, ge=1, le=3650, strict=True)
+    expiry_threshold_days: int = Field(default=180, ge=1, le=730, strict=True)
 
     @model_validator(mode="after")
     def check_intervals(self):
         if any(
             f.variant is not None
-            and (self.kind != "growth" or f.field != "product" or f.operator == "exclude")
+            and (
+                self.kind not in {"growth", "price", "margin"}
+                or f.field != "product"
+                or f.operator == "exclude"
+            )
             for f in self.filters
         ):
             raise ValueError("规格限定仅用于品种变化中的商品包含条件")

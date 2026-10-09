@@ -58,11 +58,17 @@ OPERATIONS = {
     "list": "明细",
     "existence": "是否发生",
     "growth": "品种变化与客户贡献",
+    "price": "售价变化与客户明细",
+    "margin": "采购成本口径毛利变化",
+    "inventory_risk": "库存积压与效期关注",
+    "stocking": "旺季备货依据",
 }
 METRICS = {
     "amount": "有效订单金额",
     "orders": "订单数",
     "quantity": "商品数量",
+    "unit_price": "加权平均售价",
+    "gross_profit": "采购成本口径毛利",
     "return_rate": "退货率",
     "stock": "库存",
     "turnover": "周转率",
@@ -91,6 +97,9 @@ FIELD_VALUES = {
     "scope": {"authorized": "当前授权范围", "all_buyers": "全平台"},
 }
 FIELD_LABELS = {
+    "lookback_days": "销售观察天数",
+    "age_threshold_days": "库龄关注天数",
+    "expiry_threshold_days": "剩余效期关注天数",
     "growth_basis": "比较基准",
     "growth_direction": "变化方向",
     "growth_sort": "变化排序",
@@ -133,16 +142,21 @@ def _metric_label(item, metric):
                 "amount": "单据金额",
                 "orders": "单据数",
                 "quantity": "商品数量",
+                "unit_price": "加权平均售价",
+                "gross_profit": "采购成本口径毛利",
             }[metric]
         )
     return METRICS.get(metric, "指标待明确")
 
 
 def _dates_for(report, item):
-    if item.domain == "shipping" and item.operation == "growth":
+    if item.domain == "shipping" and item.operation in {"growth", "price", "margin"}:
+        from app.analysis.costs import cost_coverage
         from app.analysis.growth import coverage
 
-        intervals = sorted(coverage(report), reverse=True)
+        intervals = sorted(
+            cost_coverage(report) if item.operation == "margin" else coverage(report), reverse=True
+        )
         if intervals:
             start, end = intervals[0]
             for begin, until in intervals[1:]:
@@ -305,7 +319,7 @@ def _build_guidance(resolution, report, today):
         nonlocal start, end
         start, end = _dates_for(report, item)
         offer("自己选择日期", action="date_range")
-        if item.operation == "growth":
+        if item.operation in {"growth", "price", "margin"}:
             from app.analysis.growth_guidance import comparable_months
 
             for begin, until, label in comparable_months(report, item):
@@ -348,7 +362,7 @@ def _build_guidance(resolution, report, today):
             if found:
                 break
         question = f"{resolution.semantic.message} 要为“{_label(item)}”选择哪个日期区间？"
-        if item.domain == "shipping" and item.operation == "growth":
+        if item.domain == "shipping" and item.operation in {"growth", "price", "margin"}:
             from app.analysis.growth_guidance import date_gap_message
 
             question = date_gap_message(report, item, today)

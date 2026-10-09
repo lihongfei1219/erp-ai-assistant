@@ -3,6 +3,17 @@ from decimal import Decimal
 from app.schemas.operations import DocumentFacts
 
 
+def with_cost(facts, unit_cost="0.5"):
+    data = facts.model_dump()
+    total = Decimal(0)
+    for doc in data["documents"]:
+        for line in doc["lines"]:
+            line["purchase_unit_cost"] = Decimal(unit_cost)
+            total += line["quantity"] * Decimal(unit_cost)
+    data.update(cost_ready=True, control_purchase_cost=total)
+    return DocumentFacts.model_validate(data)
+
+
 def part(start, end, entries, offset=0, unit="盒"):
     docs = []
     for i, (buyer, amount) in enumerate(entries, offset + 1):

@@ -36,6 +36,8 @@ def describe_interpretation(
                 "amount": f"{label}单据金额",
                 "orders": f"{label}单据数",
                 "quantity": "数量（按单位分别统计）",
+                "unit_price": "加权平均售价（未扣退货、税额未拆分）",
+                "gross_profit": "采购成本口径毛利（未扣退货、税额未拆分）",
                 "stock": "库存数量（按单位分别统计）",
             }[step.metric]
             operation = {
@@ -46,12 +48,18 @@ def describe_interpretation(
                 "list": "明细",
                 "existence": "有无记录",
                 "growth": "品种变化与客户贡献",
+                "price": "售价变化与客户明细",
+                "margin": "采购成本口径毛利变化",
+                "inventory_risk": "库存积压与效期关注",
+                "stocking": "旺季备货依据",
             }[step.kind]
             detail = f"{label}{operation}：{period}；按{metric}统计"
             if step.kind.endswith("ranking"):
                 direction = "从高到低" if step.order == "descending" else "从低到高"
                 detail += f"；{direction}，每组前 {step.top_n} 名"
-            if step.domain == "inventory":
+            if step.kind == "stocking":
+                detail += "；日期为计划备货期间，库存取备份时点；情景条件需到网页按品种手动填写"
+            elif step.domain == "inventory":
                 detail += "；该日期仅选择备份库存时点，实际截至时间见结果，不是日末或实时库存"
             descriptions.append(detail + "。")
             continue

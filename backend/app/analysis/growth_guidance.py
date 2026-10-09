@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from app.analysis.costs import cost_coverage
 from app.analysis.growth import LABELS, coverage, period_covered
 from app.core.comparison_periods import growth_periods
 from app.schemas.analytics import AnalysisStep
@@ -31,7 +32,7 @@ def _periods(item, start, end):
 
 
 def comparable_months(report, item, limit=3):
-    intervals = coverage(report)
+    intervals = cost_coverage(report) if item.operation == "margin" else coverage(report)
     months = set()
     for start, end in intervals:
         month = start.replace(day=1)
@@ -65,21 +66,37 @@ def date_gap_message(report, item, today):
         periods = _periods(item, start, end)
     except (TypeError, ValueError, OverflowError):
         return "请明确本期日期；本期及所选比较期均需有完整出库数据。"
-    intervals = coverage(report)
+    intervals = cost_coverage(report) if item.operation == "margin" else coverage(report)
     missing = [
         f"{LABELS[key]}（{_period_label(a, b)}）"
         for key, (a, b) in periods.items()
         if not period_covered(intervals, a, b)
     ]
     target = "指定品种内的客户" if item.target == "buyer" else "品种"
-    metric = "出库数量" if item.metric == "quantity" else "出库金额"
+    metric = (
+        "采购成本口径毛利"
+        if item.operation == "margin"
+        else "加权平均售价"
+        if item.operation in {"price", "margin"}
+        else "出库数量"
+        if item.metric == "quantity"
+        else "出库金额"
+    )
     parts = [
         f"已理解：按{target}比较{metric}变化。",
         "；".join(f"{LABELS[key]}：{_period_label(a, b)}" for key, (a, b) in periods.items())
         + "。",
     ]
     if missing:
-        parts.append("暂不能计算：" + "、".join(missing) + "的出库数据未完整覆盖。")
+        parts.append(
+            "暂不能计算："
+            + "、".join(missing)
+            + (
+                "的出库采购成本未完整覆盖。"
+                if item.operation == "margin"
+                else "的出库数据未完整覆盖。"
+            )
+        )
     parts.append(
         "下方月份已核对所需比较期；你也可以直接说其他日期。"
         if comparable_months(report, item, limit=1)
